@@ -78,7 +78,6 @@ if (isUserAdmin && adminState) {
     var refId = "";
     var refTitle = "";
 
-    // Check if message is a forwarded message from channel
     var fwdFrom = null;
     if (typeof request !== "undefined" && request && request.message && request.message.forward_from_chat) {
       fwdFrom = request.message.forward_from_chat;
@@ -191,13 +190,11 @@ if (isUserAdmin && adminState) {
     });
     Bot.setProperty("fsub_channels", channels, "json");
 
-    // Clean temp state
     User.setProperty("admin_state", null, "string");
     User.setProperty("temp_chan_ref", null, "string");
     User.setProperty("temp_chan_title", null, "string");
     User.setProperty("temp_chan_type", null, "string");
 
-    // Log action to log channel
     var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
     if (logChannel) {
       try {
@@ -225,7 +222,6 @@ if (isUserAdmin && adminState) {
     var channels = Bot.getProperty("fsub_channels") || [];
     var removeIndex = -1;
 
-    // Check if numeric input or tapped button
     var cleanText = text.replace("🗑", "").trim();
     for (var r = 0; r < channels.length; r++) {
       var candidate = channels[r];
@@ -277,7 +273,6 @@ if (isUserAdmin && adminState) {
         var removedChan = channels.splice(rIdx, 1)[0];
         Bot.setProperty("fsub_channels", channels, "json");
 
-        // Log action
         var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
         if (logChannel) {
           try {
@@ -337,7 +332,6 @@ if (isUserAdmin && adminState) {
 
     var statusMsg = newStatus ? "✅ Enabled" : "🚫 Disabled";
 
-    // Log action
     var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
     if (logChannel) {
       try {
@@ -403,50 +397,46 @@ if (userState === "waiting_new_caption") {
   var newCaption = text;
   var active = User.getProperty("active_fwd");
 
-  if (!active || !active.chat_id || !active.message_id) {
+  if (!active) {
     Bot.sendMessage("⚠️ Message expired. Please forward again.");
     User.setProperty("user_state", null, "string");
     return;
   }
 
-  // Send message with new caption and no forward tag
-  if (active.is_pure_text) {
-    Api.sendMessage({
-      chat_id: chat.chatid,
-      text: newCaption
-    });
-  } else {
-    Api.copyMessage({
-      chat_id: chat.chatid,
-      from_chat_id: active.chat_id,
-      message_id: active.message_id,
-      caption: newCaption
-    });
+  var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
+
+  function sendCleanWithCaption(targetChatId) {
+    if (active.file_type === "document") {
+      Api.sendDocument({ chat_id: targetChatId, document: active.file_id, caption: newCaption });
+    } else if (active.file_type === "video") {
+      Api.sendVideo({ chat_id: targetChatId, video: active.file_id, caption: newCaption });
+    } else if (active.file_type === "photo") {
+      Api.sendPhoto({ chat_id: targetChatId, photo: active.file_id, caption: newCaption });
+    } else if (active.file_type === "audio") {
+      Api.sendAudio({ chat_id: targetChatId, audio: active.file_id, caption: newCaption });
+    } else if (active.file_type === "voice") {
+      Api.sendVoice({ chat_id: targetChatId, voice: active.file_id, caption: newCaption });
+    } else if (active.file_type === "animation") {
+      Api.sendAnimation({ chat_id: targetChatId, animation: active.file_id, caption: newCaption });
+    } else {
+      Api.sendMessage({ chat_id: targetChatId, text: newCaption });
+    }
   }
 
-  // Log to log channel
-  var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
+  // 1. Send to user
+  sendCleanWithCaption(chat.chatid);
+
+  // 2. Log to private log channel
   if (logChannel) {
     try {
-      if (active.is_pure_text) {
-        Api.sendMessage({
-          chat_id: logChannel,
-          text: newCaption
-        });
-      } else {
-        Api.copyMessage({
-          chat_id: logChannel,
-          from_chat_id: active.chat_id,
-          message_id: active.message_id,
-          caption: newCaption
-        });
-      }
+      sendCleanWithCaption(logChannel);
       Api.sendMessage({
         chat_id: logChannel,
         text: "📋 <b>Message Logged:</b>\n" +
           "• User: " + (user.first_name || "") + " (@" + (user.username || "None") + ")\n" +
           "• ID: <code>" + user.telegramid + "</code>\n" +
-          "• Action: Edited Caption",
+          "• Action: Edited Caption\n" +
+          "• File Type: " + (active.file_type || "text"),
         parse_mode: "html"
       });
     } catch (e) {}
@@ -462,15 +452,46 @@ if (userState === "waiting_new_caption") {
   return;
 }
 
-// 5. Incoming Forwarded or Media Message Handler (Core Tag Remover Engine)
-var msgObj = null;
-if (typeof request !== "undefined" && request && request.message) {
-  msgObj = request.message;
-} else if (typeof message === "object" && message) {
-  msgObj = message;
-}
+// 5. Comprehensive Media & Forward Detection
+var doc = (typeof request !== "undefined" && request && request.document) || 
+          (typeof request !== "undefined" && request && request.message && request.message.document) || 
+          (typeof options !== "undefined" && options && options.document) || 
+          (typeof message === "object" && message && message.document);
 
-if (msgObj) {
+var video = (typeof request !== "undefined" && request && request.video) || 
+            (typeof request !== "undefined" && request && request.message && request.message.video) || 
+            (typeof options !== "undefined" && options && options.video) || 
+            (typeof message === "object" && message && message.video);
+
+var photo = (typeof request !== "undefined" && request && request.photo) || 
+            (typeof request !== "undefined" && request && request.message && request.message.photo) || 
+            (typeof options !== "undefined" && options && options.photo) || 
+            (typeof message === "object" && message && message.photo);
+
+var audio = (typeof request !== "undefined" && request && request.audio) || 
+            (typeof request !== "undefined" && request && request.message && request.message.audio) || 
+            (typeof options !== "undefined" && options && options.audio) || 
+            (typeof message === "object" && message && message.audio);
+
+var voice = (typeof request !== "undefined" && request && request.voice) || 
+            (typeof request !== "undefined" && request && request.message && request.message.voice) || 
+            (typeof options !== "undefined" && options && options.voice) || 
+            (typeof message === "object" && message && message.voice);
+
+var animation = (typeof request !== "undefined" && request && request.animation) || 
+                (typeof request !== "undefined" && request && request.message && request.message.animation) || 
+                (typeof options !== "undefined" && options && options.animation);
+
+var caption = (typeof request !== "undefined" && request && request.caption) || 
+              (typeof request !== "undefined" && request && request.message && request.message.caption) || "";
+
+var hasMedia = Boolean(doc || video || photo || audio || voice || animation);
+
+// Check if message is forwarded or standard text
+var msgId = (typeof request !== "undefined" && request && request.message && request.message.message_id) || 
+            (typeof message === "object" && message && message.message_id);
+
+if (hasMedia || (text && text.length > 0)) {
   // Check if normal user has satisfied Force Channels
   if (!isUserAdmin) {
     var fsubChans = Bot.getProperty("fsub_channels") || [];
@@ -489,19 +510,57 @@ if (msgObj) {
     }
   }
 
-  var isPureText = Boolean(msgObj.text && !msgObj.photo && !msgObj.video && !msgObj.document && !msgObj.audio && !msgObj.voice);
-  var currentCaption = msgObj.caption || (isPureText ? msgObj.text : "No caption");
+  var fileType = "text";
+  var fileId = null;
+  var fileName = "";
 
-  // Save active forward details
+  if (doc) {
+    fileType = "document";
+    fileId = doc.file_id;
+    fileName = doc.file_name || "Document";
+  } else if (video) {
+    fileType = "video";
+    fileId = video.file_id;
+    fileName = video.file_name || "Video.mp4";
+  } else if (animation) {
+    fileType = "animation";
+    fileId = animation.file_id;
+    fileName = animation.file_name || "Animation.gif";
+  } else if (photo) {
+    fileType = "photo";
+    var photoArr = Array.isArray(photo) ? photo : [photo];
+    var bestPhoto = photoArr[photoArr.length - 1];
+    fileId = bestPhoto.file_id;
+    fileName = "Photo.jpg";
+  } else if (audio) {
+    fileType = "audio";
+    fileId = audio.file_id;
+    fileName = audio.title || audio.file_name || "Audio.mp3";
+  } else if (voice) {
+    fileType = "voice";
+    fileId = voice.file_id;
+    fileName = "Voice message";
+  }
+
+  var activeCaption = caption || (fileType === "text" ? text : "");
+
+  // Save active forward item details in User state
   User.setProperty("active_fwd", {
     chat_id: chat.chatid,
-    message_id: msgObj.message_id,
-    is_pure_text: isPureText,
-    caption: currentCaption
+    source_message_id: msgId,
+    file_type: fileType,
+    file_id: fileId,
+    file_name: fileName,
+    caption: activeCaption
   }, "json");
 
-  var preview = currentCaption;
-  if (preview.length > 50) preview = preview.substring(0, 47) + "...";
+  var preview = activeCaption;
+  if (!preview) {
+    preview = fileName || "No caption";
+  }
+  if (preview.length > 60) {
+    preview = preview.substring(0, 57) + "...";
+  }
 
   var inlineButtons = [
     [
@@ -513,12 +572,17 @@ if (msgObj) {
     ]
   ];
 
+  var displayType = fileType.toUpperCase();
+  if (fileType === "document" && fileName) {
+    displayType = "FILE (" + fileName + ")";
+  }
+
   Api.sendMessage({
     chat_id: chat.chatid,
     text: "📥 <b>Message Receive Hua!</b>\n\n" +
-      "• <b>Type:</b> " + (isPureText ? "Text Message" : "Media (Photo/Video/File)") + "\n" +
-      "• <b>Current Caption:</b> <code>" + preview + "</code>\n\n" +
-      "Kripya niche option chunein:",
+      "• <b>Type:</b> <code>" + displayType + "</code>\n" +
+      "• <b>Caption / Text:</b> <code>" + preview + "</code>\n\n" +
+      "Aap kya karna chahte hain?",
     parse_mode: "html",
     reply_markup: {
       inline_keyboard: inlineButtons

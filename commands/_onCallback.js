@@ -22,54 +22,81 @@ if (!data) return;
 if (data === "btn_cancel") {
   User.setProperty("user_state", null, "string");
   User.setProperty("active_fwd", null, "json");
-  Api.answerCallbackQuery({
-    callback_query_id: request.id,
-    text: "Cancelled."
-  });
-  Api.deleteMessage({
-    chat_id: chat.chatid,
-    message_id: request.message.message_id
-  });
+  try {
+    Api.answerCallbackQuery({
+      callback_query_id: request.id,
+      text: "Cancelled."
+    });
+    Api.deleteMessage({
+      chat_id: chat.chatid,
+      message_id: request.message.message_id
+    });
+  } catch (e) {}
   Bot.sendMessage("❌ Action cancelled. Aap naya message forward kar sakte hain.");
   return;
 }
 
 if (data === "btn_done") {
   var active = User.getProperty("active_fwd");
-  if (!active || !active.chat_id || !active.message_id) {
-    Api.answerCallbackQuery({
-      callback_query_id: request.id,
-      text: "Message expired. Please forward again.",
-      show_alert: true
-    });
+  if (!active) {
+    try {
+      Api.answerCallbackQuery({
+        callback_query_id: request.id,
+        text: "Message expired. Please forward again.",
+        show_alert: true
+      });
+    } catch (e) {}
     return;
   }
 
-  // Copy message to user without forward header
-  Api.copyMessage({
-    chat_id: chat.chatid,
-    from_chat_id: active.chat_id,
-    message_id: active.message_id
-  });
-
-  // Log to private log channel
   var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
+  var sendCaption = active.caption || "";
+
+  // Helper function to send media cleanly by file_id without ANY forward header
+  function deliverCleanMedia(targetChatId) {
+    if (active.file_type === "document") {
+      Api.sendDocument({ chat_id: targetChatId, document: active.file_id, caption: sendCaption });
+    } else if (active.file_type === "video") {
+      Api.sendVideo({ chat_id: targetChatId, video: active.file_id, caption: sendCaption });
+    } else if (active.file_type === "photo") {
+      Api.sendPhoto({ chat_id: targetChatId, photo: active.file_id, caption: sendCaption });
+    } else if (active.file_type === "audio") {
+      Api.sendAudio({ chat_id: targetChatId, audio: active.file_id, caption: sendCaption });
+    } else if (active.file_type === "voice") {
+      Api.sendVoice({ chat_id: targetChatId, voice: active.file_id, caption: sendCaption });
+    } else if (active.file_type === "animation") {
+      Api.sendAnimation({ chat_id: targetChatId, animation: active.file_id, caption: sendCaption });
+    } else {
+      // Pure text or copyMessage fallback
+      if (active.source_message_id) {
+        Api.copyMessage({
+          chat_id: targetChatId,
+          from_chat_id: active.chat_id,
+          message_id: active.source_message_id
+        });
+      } else if (sendCaption) {
+        Api.sendMessage({ chat_id: targetChatId, text: sendCaption });
+      }
+    }
+  }
+
+  // 1. Deliver to User cleanly
+  deliverCleanMedia(chat.chatid);
+
+  // 2. Deliver to Log Channel
   if (logChannel) {
     try {
-      Api.copyMessage({
-        chat_id: logChannel,
-        from_chat_id: active.chat_id,
-        message_id: active.message_id
-      });
+      deliverCleanMedia(logChannel);
       Api.sendMessage({
         chat_id: logChannel,
         text: "📋 <b>Message Logged:</b>\n" +
           "• User: " + (user.first_name || "") + " (@" + (user.username || "None") + ")\n" +
           "• ID: <code>" + user.telegramid + "</code>\n" +
-          "• Action: Clean Forward (Done)",
+          "• Action: Clean Forward (Done)\n" +
+          "• File Type: " + (active.file_type || "text"),
         parse_mode: "html"
       });
-    } catch (e) {}
+    } catch (err) {}
   }
 
   // Update total processed count
@@ -80,33 +107,36 @@ if (data === "btn_done") {
   User.setProperty("active_fwd", null, "json");
   User.setProperty("user_state", null, "string");
 
-  Api.answerCallbackQuery({
-    callback_query_id: request.id,
-    text: "✅ Forward tag removed successfully!"
-  });
-
-  Api.deleteMessage({
-    chat_id: chat.chatid,
-    message_id: request.message.message_id
-  });
+  try {
+    Api.answerCallbackQuery({
+      callback_query_id: request.id,
+      text: "✅ Forward tag removed successfully!"
+    });
+    Api.deleteMessage({
+      chat_id: chat.chatid,
+      message_id: request.message.message_id
+    });
+  } catch (e) {}
   return;
 }
 
 if (data === "btn_edit") {
   var active = User.getProperty("active_fwd");
-  if (!active || !active.chat_id || !active.message_id) {
-    Api.answerCallbackQuery({
-      callback_query_id: request.id,
-      text: "Message expired. Please forward again.",
-      show_alert: true
-    });
+  if (!active) {
+    try {
+      Api.answerCallbackQuery({
+        callback_query_id: request.id,
+        text: "Message expired. Please forward again.",
+        show_alert: true
+      });
+    } catch (e) {}
     return;
   }
 
   User.setProperty("user_state", "waiting_new_caption", "string");
-  Api.answerCallbackQuery({
-    callback_query_id: request.id
-  });
+  try {
+    Api.answerCallbackQuery({ callback_query_id: request.id });
+  } catch (e) {}
 
   var cancelKb = [
     [
@@ -116,7 +146,9 @@ if (data === "btn_edit") {
 
   Api.sendMessage({
     chat_id: chat.chatid,
-    text: "✍️ <b>Apna naya caption ya text message bhejein:</b>\n\n<i>Cancel karne ke liye neeche [ ❌ Cancel ] dabayein.</i>",
+    text: "✍️ <b>Apna naya caption ya text message bhejein:</b>\n\n" +
+      "<i>(Aap jo bhi naya text likhenge, wo is file/media par lag kar bina kisi tag ke bhej diya jayega)</i>\n\n" +
+      "<i>Cancel karne ke liye neeche [ ❌ Cancel ] dabayein.</i>",
     parse_mode: "html",
     reply_markup: {
       keyboard: cancelKb,
