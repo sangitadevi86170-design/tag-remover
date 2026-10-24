@@ -33,9 +33,11 @@ for (var i = 0; i < channels.length; i++) {
   if (channels[i].enabled !== false) enabledChannelsCount++;
 }
 
+var currentAdminId = user.telegramid;
+
 var adminText = "👑 <b>ADMINISTRATOR CONTROL PANEL</b>\n\n" +
   "📊 <b>Bot Overview & Stats:</b>\n" +
-  "• <b>Admin ID:</b> <code>" + adminId + "</code>\n" +
+  "• <b>Admin ID:</b> <code>" + currentAdminId + "</code>\n" +
   "• <b>Total Users:</b> " + userList.length + "\n" +
   "• <b>Messages Processed:</b> " + totalProcessed + "\n" +
   "• <b>Force Channels:</b> " + channels.length + " (" + enabledChannelsCount + " Enabled)\n" +
