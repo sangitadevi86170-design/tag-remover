@@ -781,8 +781,83 @@ if (hasMedia || (text && text.length > 0)) {
     return;
   }
 
-  // --- HANDLING FOR MEDIA (FILES, ZIP, PHOTOS, VIDEOS, AUDIO) ---
-  // Save active forward item details in User state for Edit/Done options
+  // Check if this is part of an album / bulk forward (media_group_id or rapid bulk stream)
+  var mediaGroupId = (rawMsg && rawMsg.media_group_id) || 
+                     (typeof request !== "undefined" && request && request.media_group_id) || null;
+
+  var nowTs = Date.now ? Date.now() : new Date().getTime();
+  var lastFwdTime = User.getProperty("last_fwd_time") || 0;
+  var isBulkStream = (mediaGroupId !== null) || (nowTs - lastFwdTime < 2500);
+  User.setProperty("last_fwd_time", nowTs, "integer");
+
+  // Helper function to deliver media cleanly without ANY forward tag
+  function deliverCleanMediaNow(targetChatId) {
+    var pParams = { chat_id: targetChatId, caption: activeCaption };
+    if (captionEntities && captionEntities.length > 0) pParams.caption_entities = captionEntities;
+
+    try {
+      if (fileType === "document") {
+        pParams.document = fileId;
+        Api.sendDocument(pParams);
+      } else if (fileType === "video") {
+        pParams.video = fileId;
+        Api.sendVideo(pParams);
+      } else if (fileType === "photo") {
+        pParams.photo = fileId;
+        Api.sendPhoto(pParams);
+      } else if (fileType === "audio") {
+        pParams.audio = fileId;
+        Api.sendAudio(pParams);
+      } else if (fileType === "voice") {
+        pParams.voice = fileId;
+        Api.sendVoice(pParams);
+      } else if (fileType === "animation") {
+        pParams.animation = fileId;
+        Api.sendAnimation(pParams);
+      } else {
+        if (msgId) {
+          Api.copyMessage({ chat_id: targetChatId, from_chat_id: chat.chatid, message_id: msgId });
+        } else if (activeCaption) {
+          Api.sendMessage({ chat_id: targetChatId, text: activeCaption });
+        }
+      }
+    } catch (err) {
+      if (msgId) {
+        try {
+          Api.copyMessage({ chat_id: targetChatId, from_chat_id: chat.chatid, message_id: msgId });
+        } catch (e2) {}
+      }
+    }
+  }
+
+  // --- CASE A: BULK / ALBUM FORWARDING ---
+  // If bulk media forwarded: automatically remove tags and send clean files directly!
+  if (isBulkStream) {
+    deliverCleanMediaNow(chat.chatid);
+
+    var logChan = Bot.getProperty("log_channel") || "-1002466551308";
+    if (logChan) {
+      try {
+        deliverCleanMediaNow(logChan);
+        Api.sendMessage({
+          chat_id: logChan,
+          text: "📋 <b>Message Logged:</b>\n" +
+            "• User: " + (user.first_name || "") + " (@" + (user.username || "None") + ")\n" +
+            "• ID: <code>" + user.telegramid + "</code>\n" +
+            "• Action: Bulk Clean Forward (Auto)\n" +
+            "• File Type: " + fileType,
+          parse_mode: "html"
+        });
+      } catch (e3) {}
+    }
+
+    var bCount = Bot.getProperty("total_processed") || 0;
+    Bot.setProperty("total_processed", bCount + 1, "integer");
+    return;
+  }
+
+  // --- CASE B: SINGLE MEDIA FORWARDING ---
+  // Allow user to Edit Caption or click Done / Send
   User.setProperty("active_fwd", {
     chat_id: chat.chatid,
     source_message_id: msgId,
