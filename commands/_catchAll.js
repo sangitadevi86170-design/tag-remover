@@ -387,25 +387,127 @@ if (isUserAdmin && adminState) {
   // --- BROADCAST MESSAGE ---
   if (adminState === "waiting_broadcast_msg") {
     User.setProperty("admin_state", null, "string");
-    var incomingMsgId = null;
-    if (typeof request !== "undefined" && request && request.message) {
-      incomingMsgId = request.message.message_id;
+
+    var userList = Bot.getProperty("user_list") || [];
+    if (!userList || userList.length === 0) {
+      Bot.sendMessage("⚠️ <b>No users found in database to broadcast to.</b>", { parse_mode: "html" });
+      Bot.runCommand("/admin");
+      return;
     }
 
-    if (incomingMsgId) {
-      Bot.runAll({
-        command: "/onBroadcastItem",
-        for_chats: "private-chats",
-        options: {
-          from_chat_id: chat.chatid,
-          message_id: incomingMsgId
+    // Media detection
+    var bDoc = (typeof request !== "undefined" && request && request.document) || 
+               (typeof request !== "undefined" && request && request.message && request.message.document) || 
+               (typeof message === "object" && message && message.document);
+
+    var bVideo = (typeof request !== "undefined" && request && request.video) || 
+                 (typeof request !== "undefined" && request && request.message && request.message.video) || 
+                 (typeof message === "object" && message && message.video);
+
+    var bPhoto = (typeof request !== "undefined" && request && request.photo) || 
+                 (typeof request !== "undefined" && request && request.message && request.message.photo) || 
+                 (typeof message === "object" && message && message.photo);
+
+    var bAudio = (typeof request !== "undefined" && request && request.audio) || 
+                 (typeof request !== "undefined" && request && request.message && request.message.audio) || 
+                 (typeof message === "object" && message && message.audio);
+
+    var bCaption = (typeof request !== "undefined" && request && request.caption) || 
+                   (typeof request !== "undefined" && request && request.message && request.message.caption) || "";
+
+    var bEntities = (typeof request !== "undefined" && request && request.caption_entities) || 
+                    (typeof request !== "undefined" && request && request.message && request.message.caption_entities) ||
+                    (typeof request !== "undefined" && request && request.entities) ||
+                    (typeof request !== "undefined" && request && request.message && request.message.entities) || null;
+
+    var sentCount = 0;
+    var failCount = 0;
+
+    for (var u = 0; u < userList.length; u++) {
+      var targetItem = userList[u];
+      var targetChatId = (typeof targetItem === "object" && targetItem) ? targetItem.id : targetItem;
+
+      if (!targetChatId) {
+        failCount++;
+        continue;
+      }
+
+      try {
+        if (bPhoto) {
+          var pArr = Array.isArray(bPhoto) ? bPhoto : [bPhoto];
+          var pId = pArr[pArr.length - 1].file_id;
+          var pParams = { chat_id: targetChatId, photo: pId, caption: bCaption, on_error: "/onBroadcastError" };
+          if (bEntities && bEntities.length > 0) pParams.caption_entities = bEntities;
+          else pParams.parse_mode = "html";
+          Api.sendPhoto(pParams);
+          sentCount++;
+        } else if (bVideo) {
+          var vParams = { chat_id: targetChatId, video: bVideo.file_id, caption: bCaption, on_error: "/onBroadcastError" };
+          if (bEntities && bEntities.length > 0) vParams.caption_entities = bEntities;
+          else vParams.parse_mode = "html";
+          Api.sendVideo(vParams);
+          sentCount++;
+        } else if (bDoc) {
+          var dParams = { chat_id: targetChatId, document: bDoc.file_id, caption: bCaption, on_error: "/onBroadcastError" };
+          if (bEntities && bEntities.length > 0) dParams.caption_entities = bEntities;
+          else dParams.parse_mode = "html";
+          Api.sendDocument(dParams);
+          sentCount++;
+        } else if (bAudio) {
+          var aParams = { chat_id: targetChatId, audio: bAudio.file_id, caption: bCaption, on_error: "/onBroadcastError" };
+          if (bEntities && bEntities.length > 0) aParams.caption_entities = bEntities;
+          else aParams.parse_mode = "html";
+          Api.sendAudio(aParams);
+          sentCount++;
+        } else if (text) {
+          var tParams = { chat_id: targetChatId, text: text, on_error: "/onBroadcastError" };
+          if (bEntities && bEntities.length > 0) tParams.entities = bEntities;
+          else tParams.parse_mode = "html";
+          Api.sendMessage(tParams);
+          sentCount++;
+        } else {
+          failCount++;
         }
-      });
-      Bot.sendMessage("🚀 <b>Broadcast started successfully for all private chat users!</b>", { parse_mode: "html" });
-    } else {
-      Bot.sendMessage("⚠️ Broadcast failed: could not detect message.");
+      } catch (e) {
+        failCount++;
+      }
     }
-    Bot.runCommand("/admin");
+
+    var successRate = userList.length > 0 ? ((sentCount / userList.length) * 100).toFixed(1) : "100.0";
+
+    var adminReplyKeyboard = [
+      [
+        { text: "📢 Force Channels", style: "primary" },
+        { text: "📢 Broadcast", style: "primary" }
+      ],
+      [
+        { text: "📥 Export Users CSV", style: "primary" },
+        { text: "⚙️ Set Log Channel", style: "primary" }
+      ],
+      [
+        { text: "🔙 Back to Main", style: "danger" }
+      ]
+    ];
+
+    var reportMsg = "📢 <b>BROADCAST DISPATCH REPORT</b>\n\n" +
+      "━━━━━━━━━━━━━━━━━━━━\n" +
+      "👥 <b>Total Users in Database:</b> <code>" + userList.length + "</code>\n" +
+      "✅ <b>Successfully Dispatched:</b> <code>" + sentCount + "</code>\n" +
+      "❌ <b>Failed / Invalid:</b> <code>" + failCount + "</code>\n" +
+      "📊 <b>Delivery Rate:</b> <code>" + successRate + "%</code>\n" +
+      "━━━━━━━━━━━━━━━━━━━━\n" +
+      "⚡ <b>Status:</b> Completed Successfully ✅";
+
+    Api.sendMessage({
+      chat_id: chat.chatid,
+      text: reportMsg,
+      parse_mode: "html",
+      reply_markup: {
+        keyboard: adminReplyKeyboard,
+        resize_keyboard: true,
+        is_persistent: true
+      }
+    });
     return;
   }
 }
