@@ -69,6 +69,26 @@ if (text === "🔙 Back to Main" || text === "Back to Main") {
   return;
 }
 
+if (text === "ℹ️ Help" || text === "Help" || text === "/help") {
+  Bot.runCommand("/help");
+  return;
+}
+
+if (text === "📊 Bot Stats" || text === "Bot Stats" || text === "/stats") {
+  Bot.runCommand("/stats");
+  return;
+}
+
+if (text === "👑 Admin Panel" || text === "Admin Panel" || text === "/admin" || text === "/panel") {
+  Bot.runCommand("/admin");
+  return;
+}
+
+if (text === "📢 Force Channels" || text === "Force Channels" || text === "/forcechannels" || text === "/fsubchannels") {
+  Bot.runCommand("/forcechannels");
+  return;
+}
+
 // 3. Admin State Machine
 var adminState = User.getProperty("admin_state");
 
@@ -407,19 +427,19 @@ if (userState === "waiting_new_caption") {
 
   function sendCleanWithCaption(targetChatId) {
     if (active.file_type === "document") {
-      Api.sendDocument({ chat_id: targetChatId, document: active.file_id, caption: newCaption });
+      Api.sendDocument({ chat_id: targetChatId, document: active.file_id, caption: newCaption, parse_mode: "html" });
     } else if (active.file_type === "video") {
-      Api.sendVideo({ chat_id: targetChatId, video: active.file_id, caption: newCaption });
+      Api.sendVideo({ chat_id: targetChatId, video: active.file_id, caption: newCaption, parse_mode: "html" });
     } else if (active.file_type === "photo") {
-      Api.sendPhoto({ chat_id: targetChatId, photo: active.file_id, caption: newCaption });
+      Api.sendPhoto({ chat_id: targetChatId, photo: active.file_id, caption: newCaption, parse_mode: "html" });
     } else if (active.file_type === "audio") {
-      Api.sendAudio({ chat_id: targetChatId, audio: active.file_id, caption: newCaption });
+      Api.sendAudio({ chat_id: targetChatId, audio: active.file_id, caption: newCaption, parse_mode: "html" });
     } else if (active.file_type === "voice") {
-      Api.sendVoice({ chat_id: targetChatId, voice: active.file_id, caption: newCaption });
+      Api.sendVoice({ chat_id: targetChatId, voice: active.file_id, caption: newCaption, parse_mode: "html" });
     } else if (active.file_type === "animation") {
-      Api.sendAnimation({ chat_id: targetChatId, animation: active.file_id, caption: newCaption });
+      Api.sendAnimation({ chat_id: targetChatId, animation: active.file_id, caption: newCaption, parse_mode: "html" });
     } else {
-      Api.sendMessage({ chat_id: targetChatId, text: newCaption });
+      Api.sendMessage({ chat_id: targetChatId, text: newCaption, parse_mode: "html" });
     }
   }
 
