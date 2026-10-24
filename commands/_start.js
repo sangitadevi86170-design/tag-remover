@@ -52,6 +52,7 @@ var isUserAdmin = (String(user.telegramid) === String(adminId));
 
 // Check Force Channels for normal users (admins bypass check)
 if (!isUserAdmin) {
+  var isAlreadyVerified = User.getProperty("is_channel_verified");
   var channels = Bot.getProperty("fsub_channels") || [];
   var hasEnabled = false;
   for (var c = 0; c < channels.length; c++) {
@@ -61,9 +62,8 @@ if (!isUserAdmin) {
     }
   }
 
-  if (hasEnabled) {
+  if (hasEnabled && !isAlreadyVerified) {
     User.setProperty("fsub_checking_index", 0, "integer");
-    User.setProperty("pending_action", "start", "string");
     Bot.runCommand("/checkJoin");
     return;
   }

@@ -1,12 +1,12 @@
 /*CMD
   command: /checkJoin
-  help: Force Channel verification engine
+  help: Force Channel verification engine with Inline Join buttons
   need_reply: false
   auto_retry_time: 
   folder: 
   answer: 
   keyboard: 
-  aliases: 🔵 Check Membership, Check Membership, /verify
+  aliases: 
   group: 
 CMD*/
 
@@ -22,13 +22,8 @@ for (var i = 0; i < channels.length; i++) {
 if (activeChannels.length === 0) {
   // No active channels, user is verified
   User.setProperty("fsub_checking_index", 0, "integer");
-  var pendingAction = User.getProperty("pending_action");
-  User.setProperty("pending_action", null, "string");
-  if (pendingAction === "start") {
-    Bot.runCommand("/start");
-  } else {
-    Bot.sendMessage("🟢 <b>✅ Verified</b>\n\nAap ab bot use kar sakte hain!", { parse_mode: "html" });
-  }
+  User.setProperty("is_channel_verified", true, "boolean");
+  Bot.runCommand("/start");
   return;
 }
 
@@ -47,7 +42,6 @@ if (member) {
 if (!isMember && currentIndex < activeChannels.length) {
   var currentCh = activeChannels[currentIndex];
   if (currentCh && currentCh.type === "request") {
-    // User requested or clicked join request link - satisfied!
     isMember = true;
   }
 }
@@ -69,8 +63,16 @@ if (isMember) {
 
   // All enabled channels verified!
   User.setProperty("fsub_checking_index", 0, "integer");
-  var pendingAction = User.getProperty("pending_action");
-  User.setProperty("pending_action", null, "string");
+  User.setProperty("is_channel_verified", true, "boolean");
+
+  if (request && request.id) {
+    try {
+      Api.answerCallbackQuery({
+        callback_query_id: request.id,
+        text: "🟢 ✅ Verified! Access granted."
+      });
+    } catch (e) {}
+  }
 
   Bot.sendMessage("🟢 <b>✅ Verified</b>\n\nDhanyawad! Aapka channel verification safal raha.", { parse_mode: "html" });
   Bot.runCommand("/start");
@@ -89,29 +91,39 @@ if (!member && currentIndex === 0) {
   return;
 }
 
-// User has not satisfied all channels - show force join lock screen
+// User has not satisfied all channels - show force join lock screen with INLINE buttons
 User.setProperty("fsub_checking_index", 0, "integer");
 
-var lockText = "🔒 <b>ACCESS REQUIRED</b>\n\n" +
-  "Bot use karne ke liye kripya hamare official channels join karein:\n\n";
-
-for (var k = 0; k < activeChannels.length; k++) {
-  var cItem = activeChannels[k];
-  var tLabel = "Public";
-  if (cItem.type === "private") tLabel = "Private";
-  if (cItem.type === "request") tLabel = "Join Request";
-
-  lockText += (k + 1) + ". 📢 <a href=\"" + cItem.link + "\"><b>" + (cItem.title || "Join Channel") + "</b></a> (" + tLabel + ")\n" +
-    "   🔗 " + cItem.link + "\n\n";
+if (request && request.id) {
+  try {
+    Api.answerCallbackQuery({
+      callback_query_id: request.id,
+      text: "❌ You have not joined all required channels yet!",
+      show_alert: true
+    });
+  } catch (e) {}
 }
 
-lockText += "<i>Saare channels join karne ke baad neeche <b>🔵 Check Membership</b> dabayein:</i>";
+var lockText = "🔒 <b>ACCESS REQUIRED</b>\n\n" +
+  "Bot use karne ke liye kripya pehle hamare official channel ko join karein.\n\n" +
+  "1. Niche diye gaye <b>Join</b> button par click karein.\n" +
+  "2. Channel join karne ke baad <b>Joined</b> button dabayein.";
 
-var verifyReplyKeyboard = [
-  [
-    { text: "🔵 Check Membership", style: "primary" }
-  ]
-];
+var inlineKeyboard = [];
+
+// Build clickable inline button for each active channel (Text is simply "Join")
+for (var k = 0; k < activeChannels.length; k++) {
+  var cItem = activeChannels[k];
+  var btnTitle = (activeChannels.length > 1) ? ("📢 Join Channel " + (k + 1)) : "📢 Join";
+  inlineKeyboard.push([
+    { text: btnTitle, url: cItem.link }
+  ]);
+}
+
+// Verification button below the join links
+inlineKeyboard.push([
+  { text: "✅ Joined", callback_data: "/verifyJoined" }
+]);
 
 Api.sendMessage({
   chat_id: chat.chatid,
@@ -119,8 +131,6 @@ Api.sendMessage({
   parse_mode: "html",
   disable_web_page_preview: true,
   reply_markup: {
-    keyboard: verifyReplyKeyboard,
-    resize_keyboard: true,
-    is_persistent: true
+    inline_keyboard: inlineKeyboard
   }
 });

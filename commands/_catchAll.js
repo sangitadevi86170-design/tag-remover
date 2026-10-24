@@ -494,6 +494,7 @@ var msgId = (typeof request !== "undefined" && request && request.message && req
 if (hasMedia || (text && text.length > 0)) {
   // Check if normal user has satisfied Force Channels
   if (!isUserAdmin) {
+    var isVerified = User.getProperty("is_channel_verified");
     var fsubChans = Bot.getProperty("fsub_channels") || [];
     var hasActiveCh = false;
     for (var f = 0; f < fsubChans.length; f++) {
@@ -502,9 +503,8 @@ if (hasMedia || (text && text.length > 0)) {
         break;
       }
     }
-    if (hasActiveCh) {
+    if (hasActiveCh && !isVerified) {
       User.setProperty("fsub_checking_index", 0, "integer");
-      User.setProperty("pending_action", "clean_msg");
       Bot.runCommand("/checkJoin");
       return;
     }
