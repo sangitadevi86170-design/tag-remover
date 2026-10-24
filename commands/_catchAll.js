@@ -741,56 +741,18 @@ if (hasMedia || (text && text.length > 0)) {
   if (!hasMedia && fileType === "text" && activeCaption) {
     var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
 
-    // 1. Deliver clean text to user:
-    // If it is a forwarded message with source_message_id, copyMessage is the cleanest and fastest method
-    // (removes forward tag completely and guarantees 100% format/link preservation).
-    var delivered = false;
-    if (msgId) {
-      try {
-        Api.copyMessage({
-          chat_id: chat.chatid,
-          from_chat_id: chat.chatid,
-          message_id: msgId
-        });
-        delivered = true;
-      } catch (errCopy) {
-        delivered = false;
-      }
-    }
-
-    if (!delivered) {
-      try {
-        if (captionEntities && captionEntities.length > 0) {
-          Api.sendMessage({
-            chat_id: chat.chatid,
-            text: activeCaption,
-            entities: captionEntities,
-            disable_web_page_preview: true
-          });
-        } else {
-          Bot.sendMessage(activeCaption);
-        }
-      } catch (errSend) {
-        Bot.sendMessage(activeCaption);
-      }
-    }
+    // 1. Deliver clean text directly to user
+    // Bot.sendMessage directly handles raw text, emojis, links and markdown without throwing Telegram entities 400 errors
+    Bot.sendMessage(activeCaption);
 
     // 2. Deliver to log channel
     if (logChannel) {
       try {
-        if (msgId) {
-          Api.copyMessage({
-            chat_id: logChannel,
-            from_chat_id: chat.chatid,
-            message_id: msgId
-          });
-        } else {
-          Api.sendMessage({
-            chat_id: logChannel,
-            text: activeCaption,
-            disable_web_page_preview: true
-          });
-        }
+        Api.sendMessage({
+          chat_id: logChannel,
+          text: activeCaption,
+          disable_web_page_preview: true
+        });
         Api.sendMessage({
           chat_id: logChannel,
           text: "📋 <b>Message Logged:</b>\n" +
