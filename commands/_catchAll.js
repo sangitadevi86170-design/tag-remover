@@ -680,7 +680,7 @@ if (hasMedia || (text && text.length > 0)) {
     var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
 
     function deliverCleanText(targetChatId) {
-      // 1. Try copyMessage to remove forward header completely
+      var sent = false;
       if (msgId) {
         try {
           Api.copyMessage({
@@ -688,15 +688,20 @@ if (hasMedia || (text && text.length > 0)) {
             from_chat_id: chat.chatid,
             message_id: msgId
           });
-          return;
-        } catch (e) {}
+          sent = true;
+        } catch (e) {
+          sent = false;
+        }
       }
-      // 2. Fallback to sendMessage with all entities/hyperlinks preserved
-      var tParams = { chat_id: targetChatId, text: activeCaption };
-      if (captionEntities && captionEntities.length > 0) {
-        tParams.entities = captionEntities;
+
+      // Always deliver via Api.sendMessage if copyMessage was not executed
+      if (!sent) {
+        var tParams = { chat_id: targetChatId, text: activeCaption };
+        if (captionEntities && captionEntities.length > 0) {
+          tParams.entities = captionEntities;
+        }
+        Api.sendMessage(tParams);
       }
-      Api.sendMessage(tParams);
     }
 
     // 1. Deliver clean text to user
