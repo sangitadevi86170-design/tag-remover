@@ -741,30 +741,56 @@ if (hasMedia || (text && text.length > 0)) {
   if (!hasMedia && fileType === "text" && activeCaption) {
     var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
 
-    // 1. Deliver clean text to user (Bot.sendMessage safely handles full text with URLs & emojis)
-    try {
-      if (captionEntities && captionEntities.length > 0) {
-        Api.sendMessage({
+    // 1. Deliver clean text to user:
+    // If it is a forwarded message with source_message_id, copyMessage is the cleanest and fastest method
+    // (removes forward tag completely and guarantees 100% format/link preservation).
+    var delivered = false;
+    if (msgId) {
+      try {
+        Api.copyMessage({
           chat_id: chat.chatid,
-          text: activeCaption,
-          entities: captionEntities,
-          disable_web_page_preview: false
+          from_chat_id: chat.chatid,
+          message_id: msgId
         });
-      } else {
+        delivered = true;
+      } catch (errCopy) {
+        delivered = false;
+      }
+    }
+
+    if (!delivered) {
+      try {
+        if (captionEntities && captionEntities.length > 0) {
+          Api.sendMessage({
+            chat_id: chat.chatid,
+            text: activeCaption,
+            entities: captionEntities,
+            disable_web_page_preview: true
+          });
+        } else {
+          Bot.sendMessage(activeCaption);
+        }
+      } catch (errSend) {
         Bot.sendMessage(activeCaption);
       }
-    } catch (e1) {
-      Bot.sendMessage(activeCaption);
     }
 
     // 2. Deliver to log channel
     if (logChannel) {
       try {
-        Api.sendMessage({
-          chat_id: logChannel,
-          text: activeCaption,
-          disable_web_page_preview: true
-        });
+        if (msgId) {
+          Api.copyMessage({
+            chat_id: logChannel,
+            from_chat_id: chat.chatid,
+            message_id: msgId
+          });
+        } else {
+          Api.sendMessage({
+            chat_id: logChannel,
+            text: activeCaption,
+            disable_web_page_preview: true
+          });
+        }
         Api.sendMessage({
           chat_id: logChannel,
           text: "📋 <b>Message Logged:</b>\n" +
