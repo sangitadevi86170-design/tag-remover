@@ -12,16 +12,17 @@ CMD*/
 
 var isUserAdmin = (String(user.telegramid) === "8710308658" || String(user.telegramid) === "6783114912");
 
-// Extract text from message or request robustly
+// Extract incoming text and raw message robustly from all possible Telegram / BB update formats
+var rawMsg = (typeof request !== "undefined" && request && request.message) ? request.message : 
+             (typeof message === "object" && message) ? message : null;
+
 var text = "";
-if (typeof message === "string" && message) {
+if (rawMsg && typeof rawMsg.text === "string") {
+  text = rawMsg.text.trim();
+} else if (typeof message === "string" && message) {
   text = message.trim();
-} else if (typeof message === "object" && message && message.text) {
-  text = message.text.trim();
-} else if (typeof request !== "undefined" && request && typeof request.text === "string" && request.text) {
+} else if (typeof request !== "undefined" && request && typeof request.text === "string") {
   text = request.text.trim();
-} else if (typeof request !== "undefined" && request && request.message && typeof request.message.text === "string" && request.message.text) {
-  text = request.message.text.trim();
 }
 
 // 1. Universal Cancel Handler
@@ -740,30 +741,30 @@ if (hasMedia || (text && text.length > 0)) {
   if (!hasMedia && fileType === "text" && activeCaption) {
     var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
 
-    function deliverCleanText(targetChatId) {
-      try {
-        var sendParams = {
-          chat_id: targetChatId,
+    // 1. Deliver clean text to user (Bot.sendMessage safely handles full text with URLs & emojis)
+    try {
+      if (captionEntities && captionEntities.length > 0) {
+        Api.sendMessage({
+          chat_id: chat.chatid,
           text: activeCaption,
+          entities: captionEntities,
           disable_web_page_preview: false
-        };
-        if (captionEntities && captionEntities.length > 0) {
-          sendParams.entities = captionEntities;
-        }
-        Api.sendMessage(sendParams);
-      } catch (err) {
-        // Fallback to BB Bot.sendMessage if Api call encounters any issue
+        });
+      } else {
         Bot.sendMessage(activeCaption);
       }
+    } catch (e1) {
+      Bot.sendMessage(activeCaption);
     }
-
-    // 1. Deliver clean text to user
-    deliverCleanText(chat.chatid);
 
     // 2. Deliver to log channel
     if (logChannel) {
       try {
-        deliverCleanText(logChannel);
+        Api.sendMessage({
+          chat_id: logChannel,
+          text: activeCaption,
+          disable_web_page_preview: true
+        });
         Api.sendMessage({
           chat_id: logChannel,
           text: "📋 <b>Message Logged:</b>\n" +
@@ -772,7 +773,7 @@ if (hasMedia || (text && text.length > 0)) {
             "• Action: Clean Forward (Instant Text)",
           parse_mode: "html"
         });
-      } catch (err) {}
+      } catch (e2) {}
     }
 
     var tCount = Bot.getProperty("total_processed") || 0;
