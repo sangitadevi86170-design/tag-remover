@@ -1,8 +1,0 @@
-{
-  "name": "toxic-admin-panel",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "start": "node api/index.js"
-  }
-}
