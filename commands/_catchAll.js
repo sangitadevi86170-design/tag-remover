@@ -740,19 +740,69 @@ if (hasMedia || (text && text.length > 0)) {
   // Instantly remove forward tag and deliver clean text directly (no buttons needed, exact clean delivery)!
   if (!hasMedia && fileType === "text" && activeCaption) {
     var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
+    var userChatId = chat.chatid || (rawMsg && rawMsg.chat && rawMsg.chat.id) || user.telegramid;
+    var targetMsgId = msgId || (rawMsg && rawMsg.message_id);
 
-    // 1. Deliver clean text directly to user
-    // Bot.sendMessage directly handles raw text, emojis, links and markdown without throwing Telegram entities 400 errors
-    Bot.sendMessage(activeCaption);
+    // 1. Deliver clean text directly to user:
+    // Try Api.copyMessage first (exact technique used by Anonymous Forwarder Bot)
+    var success = false;
+    if (targetMsgId && userChatId) {
+      try {
+        Api.copyMessage({
+          chat_id: userChatId,
+          from_chat_id: userChatId,
+          message_id: targetMsgId
+        });
+        success = true;
+      } catch (errCopy) {
+        success = false;
+      }
+    }
+
+    // If copyMessage fails (e.g. content restricted channel), send cleanly without parse_mode to avoid 400 Bad Request
+    if (!success) {
+      try {
+        var plainParams = {
+          chat_id: userChatId,
+          text: activeCaption,
+          disable_web_page_preview: false
+        };
+        if (captionEntities && captionEntities.length > 0) {
+          plainParams.entities = captionEntities;
+        }
+        Api.sendMessage(plainParams);
+        success = true;
+      } catch (errSend) {
+        try {
+          // Direct raw string output without any parser
+          Api.sendMessage({
+            chat_id: userChatId,
+            text: activeCaption,
+            disable_web_page_preview: false
+          });
+          success = true;
+        } catch (eFinal) {
+          Bot.sendMessage(activeCaption);
+        }
+      }
+    }
 
     // 2. Deliver to log channel
     if (logChannel) {
       try {
-        Api.sendMessage({
-          chat_id: logChannel,
-          text: activeCaption,
-          disable_web_page_preview: true
-        });
+        if (targetMsgId && userChatId) {
+          Api.copyMessage({
+            chat_id: logChannel,
+            from_chat_id: userChatId,
+            message_id: targetMsgId
+          });
+        } else {
+          Api.sendMessage({
+            chat_id: logChannel,
+            text: activeCaption,
+            disable_web_page_preview: true
+          });
+        }
         Api.sendMessage({
           chat_id: logChannel,
           text: "📋 <b>Message Logged:</b>\n" +
