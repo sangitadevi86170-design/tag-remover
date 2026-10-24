@@ -1,12 +1,21 @@
-function getAdminId() {
-  return Bot.getProperty("admin_id") || "8710308658";
+var ADMINS = ["8710308658", "6783114912"];
+
+function getAdminIds() {
+  var prop = Bot.getProperty("admin_ids");
+  if (prop && Array.isArray(prop)) return prop;
+  return ADMINS;
 }
 
 function isAdmin(tgId) {
-  return String(tgId) === String(getAdminId());
+  var idStr = String(tgId);
+  var list = getAdminIds();
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i]) === idStr) return true;
+  }
+  return false;
 }
 
 publish({
-  getAdminId: getAdminId,
+  getAdminIds: getAdminIds,
   isAdmin: isAdmin
 });

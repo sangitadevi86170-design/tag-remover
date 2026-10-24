@@ -10,9 +10,9 @@
   group: 
 CMD*/
 
-var adminId = Bot.getProperty("admin_id") || "8710308658";
+var isUserAdmin = (String(user.telegramid) === "8710308658" || String(user.telegramid) === "6783114912");
 
-if (String(user.telegramid) !== String(adminId)) {
+if (!isUserAdmin) {
   Bot.sendMessage(
     "⛔ <b>Access Denied:</b> This area is reserved for the bot administrator only.",
     { parse_mode: "html" }

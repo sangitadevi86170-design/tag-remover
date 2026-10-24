@@ -10,12 +10,8 @@
   group: 
 CMD*/
 
-// Auto setup default admin and log channel if not already set
-var adminId = Bot.getProperty("admin_id");
-if (!adminId) {
-  adminId = "8710308658";
-  Bot.setProperty("admin_id", adminId, "string");
-}
+var ADMIN_IDS = ["8710308658", "6783114912"];
+Bot.setProperty("admin_ids", ADMIN_IDS, "json");
 
 var logChannel = Bot.getProperty("log_channel");
 if (!logChannel) {
@@ -48,7 +44,7 @@ User.setProperty("user_state", null, "string");
 User.setProperty("admin_state", null, "string");
 User.setProperty("active_fwd", null, "json");
 
-var isUserAdmin = (String(user.telegramid) === String(adminId));
+var isUserAdmin = (String(user.telegramid) === "8710308658" || String(user.telegramid) === "6783114912");
 
 // Check Force Channels for normal users (admins bypass check)
 if (!isUserAdmin) {
