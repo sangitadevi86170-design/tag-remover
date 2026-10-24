@@ -201,6 +201,21 @@ if (isUserAdmin && adminState) {
     var addedTime = new Date().toISOString();
 
     var channels = Bot.getProperty("fsub_channels") || [];
+
+    // Duplicate Check: Check if channel with same ID or link already exists
+    for (var d = 0; d < channels.length; d++) {
+      if (String(channels[d].id) === String(chanId) || (channels[d].link && channels[d].link === joinUrl)) {
+        User.setProperty("admin_state", null, "string");
+        User.setProperty("temp_chan_ref", null, "string");
+        User.setProperty("temp_chan_title", null, "string");
+        User.setProperty("temp_chan_type", null, "string");
+
+        Bot.sendMessage("⚠️ <b>Ye channel already added hai!</b> Duplicate channel add nahi hoga.", { parse_mode: "html" });
+        Bot.runCommand("/forcechannels");
+        return;
+      }
+    }
+
     channels.push({
       id: chanId,
       title: chanTitle,
@@ -243,17 +258,29 @@ if (isUserAdmin && adminState) {
     var channels = Bot.getProperty("fsub_channels") || [];
     var removeIndex = -1;
 
-    var cleanText = text.replace("🗑", "").trim();
-    for (var r = 0; r < channels.length; r++) {
-      var candidate = channels[r];
-      if (cleanText.indexOf(String(r + 1)) === 0 || cleanText.indexOf(String(candidate.id)) !== -1 || cleanText === String(candidate.title)) {
-        removeIndex = r;
-        break;
+    // Check for "Channel #X" button text
+    var matchBtn = text.match(/Channel\s*#?(\d+)/i);
+    if (matchBtn) {
+      var num = parseInt(matchBtn[1], 10);
+      if (num >= 1 && num <= channels.length) {
+        removeIndex = num - 1;
       }
     }
 
     if (removeIndex === -1) {
-      Bot.sendMessage("⚠️ Channel not found. Please tap the button or send the number.");
+      // Check numeric input or ID match
+      var cleanInput = text.replace("🗑", "").trim();
+      for (var r = 0; r < channels.length; r++) {
+        var candidate = channels[r];
+        if (cleanInput === String(r + 1) || cleanInput === String(candidate.id) || cleanInput === String(candidate.title)) {
+          removeIndex = r;
+          break;
+        }
+      }
+    }
+
+    if (removeIndex === -1) {
+      Bot.sendMessage("⚠️ Channel not found. Please tap one of the channel buttons below.");
       return;
     }
 
@@ -680,20 +707,15 @@ if (hasMedia || (text && text.length > 0)) {
     var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
 
     function deliverCleanText(targetChatId) {
-      // 1. Try sending via Api.sendMessage with raw text
-      try {
-        var params = {
+      if (targetChatId == chat.chatid) {
+        // Direct clean delivery to user with all links intact
+        Bot.sendMessage(activeCaption);
+      } else {
+        Api.sendMessage({
           chat_id: targetChatId,
           text: activeCaption,
           disable_web_page_preview: true
-        };
-        if (captionEntities && Array.isArray(captionEntities) && captionEntities.length > 0) {
-          params.entities = captionEntities;
-        }
-        Api.sendMessage(params);
-      } catch (err) {
-        // Fallback to simple Bot.sendMessage
-        Bot.sendMessage(activeCaption);
+        });
       }
     }
 

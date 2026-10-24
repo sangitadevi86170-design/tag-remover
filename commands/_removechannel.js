@@ -27,15 +27,17 @@ if (channels.length === 0) {
 User.setProperty("admin_state", "waiting_remove_select", "string");
 
 var text = "🗑 <b>REMOVE FORCE CHANNEL</b>\n\n" +
-  "Select a channel to remove or send its numeric Chat ID / Index:\n\n";
+  "Select a channel button below to remove, or send its numeric Chat ID / number:\n\n";
 
 var removeKeyboard = [];
 for (var i = 0; i < channels.length; i++) {
   var ch = channels[i];
-  var label = (i + 1) + ". " + (ch.title || ch.id);
-  text += "<b>" + (i + 1) + ".</b> " + (ch.title || "Channel") + " (<code>" + ch.id + "</code>)\n";
+  text += "<b>" + (i + 1) + ".</b> " + (ch.title || "Channel") + "\n" +
+    "   • ID: <code>" + ch.id + "</code>\n" +
+    "   • Type: " + (ch.type || "public") + "\n\n";
+
   removeKeyboard.push([
-    { text: "🗑 " + label, style: "danger" }
+    { text: "Channel #" + (i + 1), style: "danger" }
   ]);
 }
 
