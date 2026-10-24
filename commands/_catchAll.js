@@ -741,15 +741,19 @@ if (hasMedia || (text && text.length > 0)) {
     var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
 
     function deliverCleanText(targetChatId) {
-      if (targetChatId == chat.chatid) {
-        // Direct clean delivery to user with all links intact
-        Bot.sendMessage(activeCaption);
-      } else {
-        Api.sendMessage({
+      try {
+        var sendParams = {
           chat_id: targetChatId,
           text: activeCaption,
-          disable_web_page_preview: true
-        });
+          disable_web_page_preview: false
+        };
+        if (captionEntities && captionEntities.length > 0) {
+          sendParams.entities = captionEntities;
+        }
+        Api.sendMessage(sendParams);
+      } catch (err) {
+        // Fallback to BB Bot.sendMessage if Api call encounters any issue
+        Bot.sendMessage(activeCaption);
       }
     }
 
