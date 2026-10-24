@@ -43,22 +43,43 @@ function deliverCleanCopy(targetChatId) {
     } catch (err) {}
   }
 
-  // Smart fallback if copyMessage is not available
+  // Smart fallback with caption_entities preservation
   var sendCaption = active.caption || "";
+  var entities = active.caption_entities;
+
+  var mediaParams = {
+    chat_id: targetChatId,
+    caption: sendCaption
+  };
+  if (entities && entities.length > 0) {
+    mediaParams.caption_entities = entities;
+  } else {
+    mediaParams.parse_mode = "html";
+  }
+
   if (active.file_type === "document") {
-    Api.sendDocument({ chat_id: targetChatId, document: active.file_id, caption: sendCaption, parse_mode: "html" });
+    mediaParams.document = active.file_id;
+    Api.sendDocument(mediaParams);
   } else if (active.file_type === "video") {
-    Api.sendVideo({ chat_id: targetChatId, video: active.file_id, caption: sendCaption, parse_mode: "html" });
+    mediaParams.video = active.file_id;
+    Api.sendVideo(mediaParams);
   } else if (active.file_type === "photo") {
-    Api.sendPhoto({ chat_id: targetChatId, photo: active.file_id, caption: sendCaption, parse_mode: "html" });
+    mediaParams.photo = active.file_id;
+    Api.sendPhoto(mediaParams);
   } else if (active.file_type === "audio") {
-    Api.sendAudio({ chat_id: targetChatId, audio: active.file_id, caption: sendCaption, parse_mode: "html" });
+    mediaParams.audio = active.file_id;
+    Api.sendAudio(mediaParams);
   } else if (active.file_type === "voice") {
-    Api.sendVoice({ chat_id: targetChatId, voice: active.file_id, caption: sendCaption, parse_mode: "html" });
+    mediaParams.voice = active.file_id;
+    Api.sendVoice(mediaParams);
   } else if (active.file_type === "animation") {
-    Api.sendAnimation({ chat_id: targetChatId, animation: active.file_id, caption: sendCaption, parse_mode: "html" });
+    mediaParams.animation = active.file_id;
+    Api.sendAnimation(mediaParams);
   } else if (sendCaption) {
-    Api.sendMessage({ chat_id: targetChatId, text: sendCaption, parse_mode: "html" });
+    var textParams = { chat_id: targetChatId, text: sendCaption };
+    if (entities && entities.length > 0) textParams.entities = entities;
+    else textParams.parse_mode = "html";
+    Api.sendMessage(textParams);
   }
 }
 

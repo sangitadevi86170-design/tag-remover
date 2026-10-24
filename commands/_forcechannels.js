@@ -32,14 +32,15 @@ var text = "📢 <b>FORCE CHANNELS MANAGEMENT</b>\n\n" +
   "Active / Enabled Channels: <b>" + enabledCount + "</b>\n\n" +
   "👇 <i>Select an action using the buttons below:</i>";
 
+// 2x2 Grid with Primary on one side and Danger on the other side
 var fsubReplyKeyboard = [
   [
-    { text: "➕ Add Channel", style: "success" },
-    { text: "📋 List Channels", style: "primary" }
+    { text: "➕ Add Channel", style: "primary" },
+    { text: "🗑 Remove Channel", style: "danger" }
   ],
   [
-    { text: "🗑 Remove Channel", style: "danger" },
-    { text: "🔁 Enable/Disable Channel", style: "primary" }
+    { text: "📋 List Channels", style: "primary" },
+    { text: "🔁 Enable/Disable Channel", style: "danger" }
   ],
   [
     { text: "🔙 Back to Admin", style: "primary" }

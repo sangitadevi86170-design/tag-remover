@@ -544,6 +544,11 @@ if (hasMedia || (text && text.length > 0)) {
 
   var activeCaption = caption || (fileType === "text" ? text : "");
 
+  var captionEntities = (typeof request !== "undefined" && request && request.caption_entities) || 
+                        (typeof request !== "undefined" && request && request.message && request.message.caption_entities) ||
+                        (typeof request !== "undefined" && request && request.entities) ||
+                        (typeof request !== "undefined" && request && request.message && request.message.entities) || null;
+
   // Save active forward item details in User state
   User.setProperty("active_fwd", {
     chat_id: chat.chatid,
@@ -551,7 +556,8 @@ if (hasMedia || (text && text.length > 0)) {
     file_type: fileType,
     file_id: fileId,
     file_name: fileName,
-    caption: activeCaption
+    caption: activeCaption,
+    caption_entities: captionEntities
   }, "json");
 
   var preview = activeCaption;
