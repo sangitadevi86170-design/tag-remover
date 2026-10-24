@@ -12,13 +12,15 @@ CMD*/
 
 var isUserAdmin = (String(user.telegramid) === "8710308658" || String(user.telegramid) === "6783114912");
 
-// Extract text from message or request
+// Extract text from message or request robustly
 var text = "";
-if (typeof message === "string") {
+if (typeof message === "string" && message) {
   text = message.trim();
 } else if (typeof message === "object" && message && message.text) {
   text = message.text.trim();
-} else if (typeof request !== "undefined" && request && request.message && request.message.text) {
+} else if (typeof request !== "undefined" && request && typeof request.text === "string" && request.text) {
+  text = request.text.trim();
+} else if (typeof request !== "undefined" && request && request.message && typeof request.message.text === "string" && request.message.text) {
   text = request.message.text.trim();
 }
 
@@ -609,8 +611,9 @@ var caption = (typeof request !== "undefined" && request && request.caption) ||
 var hasMedia = Boolean(doc || video || photo || audio || voice || animation);
 
 // Check if message is forwarded or standard text
-var msgId = (typeof request !== "undefined" && request && request.message && request.message.message_id) || 
-            (typeof message === "object" && message && message.message_id);
+var msgId = (typeof request !== "undefined" && request && request.message_id) ||
+            (typeof request !== "undefined" && request && request.message && request.message.message_id) || 
+            (typeof message === "object" && message && message.message_id) || null;
 
 if (hasMedia || (text && text.length > 0)) {
   // Check if normal user has satisfied Force Channels
@@ -677,6 +680,7 @@ if (hasMedia || (text && text.length > 0)) {
     var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
 
     function deliverCleanText(targetChatId) {
+      // 1. Try copyMessage to remove forward header completely
       if (msgId) {
         try {
           Api.copyMessage({
@@ -687,9 +691,11 @@ if (hasMedia || (text && text.length > 0)) {
           return;
         } catch (e) {}
       }
+      // 2. Fallback to sendMessage with all entities/hyperlinks preserved
       var tParams = { chat_id: targetChatId, text: activeCaption };
-      if (captionEntities && captionEntities.length > 0) tParams.entities = captionEntities;
-      else tParams.parse_mode = "html";
+      if (captionEntities && captionEntities.length > 0) {
+        tParams.entities = captionEntities;
+      }
       Api.sendMessage(tParams);
     }
 
