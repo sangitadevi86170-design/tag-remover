@@ -670,7 +670,54 @@ if (hasMedia || (text && text.length > 0)) {
                         (typeof request !== "undefined" && request && request.entities) ||
                         (typeof request !== "undefined" && request && request.message && request.message.entities) || null;
 
-  // Save active forward item details in User state
+  // --- SPECIAL HANDLING FOR PURE TEXT MESSAGES ---
+  // If user forwarded or sent pure text:
+  // Instantly remove forward tag and deliver clean text directly (no buttons needed, exact clean delivery)!
+  if (!hasMedia && fileType === "text" && activeCaption) {
+    var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
+
+    function deliverCleanText(targetChatId) {
+      if (msgId) {
+        try {
+          Api.copyMessage({
+            chat_id: targetChatId,
+            from_chat_id: chat.chatid,
+            message_id: msgId
+          });
+          return;
+        } catch (e) {}
+      }
+      var tParams = { chat_id: targetChatId, text: activeCaption };
+      if (captionEntities && captionEntities.length > 0) tParams.entities = captionEntities;
+      else tParams.parse_mode = "html";
+      Api.sendMessage(tParams);
+    }
+
+    // 1. Deliver clean text to user
+    deliverCleanText(chat.chatid);
+
+    // 2. Deliver to log channel
+    if (logChannel) {
+      try {
+        deliverCleanText(logChannel);
+        Api.sendMessage({
+          chat_id: logChannel,
+          text: "📋 <b>Message Logged:</b>\n" +
+            "• User: " + (user.first_name || "") + " (@" + (user.username || "None") + ")\n" +
+            "• ID: <code>" + user.telegramid + "</code>\n" +
+            "• Action: Clean Forward (Instant Text)",
+          parse_mode: "html"
+        });
+      } catch (err) {}
+    }
+
+    var tCount = Bot.getProperty("total_processed") || 0;
+    Bot.setProperty("total_processed", tCount + 1, "integer");
+    return;
+  }
+
+  // --- HANDLING FOR MEDIA (FILES, ZIP, PHOTOS, VIDEOS, AUDIO) ---
+  // Save active forward item details in User state for Edit/Done options
   User.setProperty("active_fwd", {
     chat_id: chat.chatid,
     source_message_id: msgId,
