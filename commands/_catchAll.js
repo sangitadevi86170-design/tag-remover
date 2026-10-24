@@ -25,6 +25,115 @@ if (rawMsg && typeof rawMsg.text === "string") {
   text = request.text.trim();
 }
 
+// 0. TOP-LEVEL FORWARDED TEXT HANDLER
+// If this is a forwarded text message or normal text post:
+var docCheck = (rawMsg && rawMsg.document) || (typeof request !== "undefined" && request && request.document);
+var vidCheck = (rawMsg && rawMsg.video) || (typeof request !== "undefined" && request && request.video);
+var phoCheck = (rawMsg && rawMsg.photo) || (typeof request !== "undefined" && request && request.photo);
+var audCheck = (rawMsg && rawMsg.audio) || (typeof request !== "undefined" && request && request.audio);
+var voiCheck = (rawMsg && rawMsg.voice) || (typeof request !== "undefined" && request && request.voice);
+var aniCheck = (rawMsg && rawMsg.animation) || (typeof request !== "undefined" && request && request.animation);
+var isAnyMediaNow = Boolean(docCheck || vidCheck || phoCheck || audCheck || voiCheck || aniCheck);
+
+var userStateNow = User.getProperty("user_state");
+var adminStateNow = User.getProperty("admin_state");
+
+var isMenuCommand = (
+  text === "/start" || text === "🔙 Back to Main" || text === "Back to Main" ||
+  text === "ℹ️ Help" || text === "Help" || text === "/help" ||
+  text === "📊 Bot Stats" || text === "Bot Stats" || text === "/stats" ||
+  text === "👑 Admin Panel" || text === "Admin Panel" || text === "/admin" || text === "/panel" ||
+  text === "📢 Force Channels" || text === "Force Channels" || text === "/forcechannels" || text === "/fsubchannels" ||
+  text === "➕ Add Channel" || text === "🗑 Remove Channel" || text === "📋 List Channels" ||
+  text === "🔁 Enable/Disable Channel" || text === "📢 Broadcast" || text === "📥 Export Users CSV" ||
+  text === "⚙️ Set Log Channel" || text === "🧹 Clean Duplicates" || text === "/cleanduplicates" ||
+  text === "❌ Cancel" || text === "Cancel" || text === "/cancel" || text === "🔙 Back" || text === "Back" ||
+  text === "🔙 Back to Admin" || text === "Back to Admin" || text.indexOf("Channel #") === 0 ||
+  text === "🟢 Confirm Remove" || text === "🔴 Cancel"
+);
+
+if (!isAnyMediaNow && text && text.length > 0 && !isMenuCommand && !userStateNow && !adminStateNow) {
+  var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
+  var userChatId = chat.chatid || (rawMsg && rawMsg.chat && rawMsg.chat.id) || user.telegramid;
+  var targetMsgId = (rawMsg && rawMsg.message_id) || (typeof request !== "undefined" && request && request.message_id);
+
+  var textDelivered = false;
+
+  // 1. Try native Api.copyMessage first (exact Anonymous Forwarder Bot method)
+  if (targetMsgId && userChatId) {
+    try {
+      Api.copyMessage({
+        chat_id: userChatId,
+        from_chat_id: userChatId,
+        message_id: targetMsgId
+      });
+      textDelivered = true;
+    } catch (eCopy) {
+      textDelivered = false;
+    }
+  }
+
+  // 2. Direct Api.sendMessage with entities
+  if (!textDelivered) {
+    var rawEntities = (rawMsg && rawMsg.entities) || (typeof request !== "undefined" && request && request.entities) || null;
+    try {
+      var sParams = {
+        chat_id: userChatId,
+        text: text,
+        disable_web_page_preview: false
+      };
+      if (rawEntities && rawEntities.length > 0) {
+        sParams.entities = rawEntities;
+      }
+      Api.sendMessage(sParams);
+      textDelivered = true;
+    } catch (eEntities) {
+      try {
+        Api.sendMessage({
+          chat_id: userChatId,
+          text: text,
+          disable_web_page_preview: false
+        });
+        textDelivered = true;
+      } catch (ePlain) {
+        Bot.sendMessage(text);
+        textDelivered = true;
+      }
+    }
+  }
+
+  // 3. Log to Log Channel
+  if (logChannel) {
+    try {
+      if (targetMsgId && userChatId) {
+        Api.copyMessage({
+          chat_id: logChannel,
+          from_chat_id: userChatId,
+          message_id: targetMsgId
+        });
+      } else {
+        Api.sendMessage({
+          chat_id: logChannel,
+          text: text,
+          disable_web_page_preview: true
+        });
+      }
+      Api.sendMessage({
+        chat_id: logChannel,
+        text: "📋 <b>Message Logged:</b>\n" +
+          "• User: " + (user.first_name || "") + " (@" + (user.username || "None") + ")\n" +
+          "• ID: <code>" + user.telegramid + "</code>\n" +
+          "• Action: Clean Forward (Instant Text)",
+        parse_mode: "html"
+      });
+    } catch (eLog) {}
+  }
+
+  var curTotal = Bot.getProperty("total_processed") || 0;
+  Bot.setProperty("total_processed", curTotal + 1, "integer");
+  return;
+}
+
 // 1. Universal Cancel Handler
 if (text === "❌ Cancel" || text === "Cancel" || text === "/cancel") {
   User.setProperty("admin_state", null, "string");
