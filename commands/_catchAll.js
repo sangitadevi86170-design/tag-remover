@@ -564,11 +564,11 @@ if (hasMedia || (text && text.length > 0)) {
 
   var inlineButtons = [
     [
-      { text: "✏️ Edit Caption", callback_data: "btn_edit" },
-      { text: "✅ Done / Send", callback_data: "btn_done" }
+      { text: "✏️ Edit Caption", callback_data: "/onEdit" },
+      { text: "✅ Done / Send", callback_data: "/onDone" }
     ],
     [
-      { text: "❌ Cancel", callback_data: "btn_cancel" }
+      { text: "❌ Cancel", callback_data: "/onCancel" }
     ]
   ];
 
