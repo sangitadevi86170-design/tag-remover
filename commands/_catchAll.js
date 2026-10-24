@@ -680,13 +680,21 @@ if (hasMedia || (text && text.length > 0)) {
     var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
 
     function deliverCleanText(targetChatId) {
-      // Send directly as fresh message with all clickable links & formatting intact
-      // This guarantees the 'Forwarded from...' tag is 100% removed!
-      var tParams = { chat_id: targetChatId, text: activeCaption };
-      if (captionEntities && captionEntities.length > 0) {
-        tParams.entities = captionEntities;
+      // 1. Try sending via Api.sendMessage with raw text
+      try {
+        var params = {
+          chat_id: targetChatId,
+          text: activeCaption,
+          disable_web_page_preview: true
+        };
+        if (captionEntities && Array.isArray(captionEntities) && captionEntities.length > 0) {
+          params.entities = captionEntities;
+        }
+        Api.sendMessage(params);
+      } catch (err) {
+        // Fallback to simple Bot.sendMessage
+        Bot.sendMessage(activeCaption);
       }
-      Api.sendMessage(tParams);
     }
 
     // 1. Deliver clean text to user
