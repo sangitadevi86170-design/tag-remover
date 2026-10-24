@@ -90,6 +90,13 @@ if (text === "📢 Force Channels" || text === "Force Channels" || text === "/fo
   return;
 }
 
+if (text === "🧹 Clean Duplicates" || text === "Clean Duplicates" || text === "/cleanduplicates") {
+  if (isUserAdmin) {
+    Bot.runCommand("/delchannel duplicates");
+  }
+  return;
+}
+
 // 3. Admin State Machine
 var adminState = User.getProperty("admin_state");
 
@@ -117,6 +124,24 @@ if (isUserAdmin && adminState) {
     if (!refId) {
       Bot.sendMessage("⚠️ Invalid input. Forward message, send @username or numeric ID (e.g. -100xxx).");
       return;
+    }
+
+    // Immediate duplicate check on Step 1
+    var existingChans = Bot.getProperty("fsub_channels") || [];
+    var cleanRef = refId.replace("@", "").trim().toLowerCase();
+    for (var ex = 0; ex < existingChans.length; ex++) {
+      var existCh = existingChans[ex];
+      var existId = String(existCh.id || "").replace("@", "").trim().toLowerCase();
+      var existTitle = String(existCh.title || "").replace("@", "").trim().toLowerCase();
+      if (cleanRef === existId || (cleanRef.length > 2 && cleanRef === existTitle)) {
+        User.setProperty("admin_state", null, "string");
+        User.setProperty("temp_chan_ref", null, "string");
+        User.setProperty("temp_chan_title", null, "string");
+        User.setProperty("temp_chan_type", null, "string");
+        Bot.sendMessage("⚠️ <b>Ye channel already Force Channels me added hai!</b>\n\nChannel ID: <code>" + existCh.id + "</code> (" + (existCh.title || "Channel") + ")\n\n<i>Duplicate channel add nahi ho sakta.</i>", { parse_mode: "html" });
+        Bot.runCommand("/forcechannels");
+        return;
+      }
     }
 
     User.setProperty("temp_chan_ref", refId, "string");
@@ -255,6 +280,12 @@ if (isUserAdmin && adminState) {
 
   // --- REMOVE CHANNEL: Selection ---
   if (adminState === "waiting_remove_select") {
+    if (text.indexOf("Clean Duplicates") !== -1 || text.indexOf("Clean All Duplicates") !== -1) {
+      User.setProperty("admin_state", null, "string");
+      Bot.runCommand("/delchannel duplicates");
+      return;
+    }
+
     var channels = Bot.getProperty("fsub_channels") || [];
     var removeIndex = -1;
 
@@ -269,10 +300,13 @@ if (isUserAdmin && adminState) {
 
     if (removeIndex === -1) {
       // Check numeric input or ID match
-      var cleanInput = text.replace("🗑", "").trim();
+      var cleanInput = text.replace("🗑", "").replace("❌", "").replace("Remove", "").trim();
       for (var r = 0; r < channels.length; r++) {
         var candidate = channels[r];
-        if (cleanInput === String(r + 1) || cleanInput === String(candidate.id) || cleanInput === String(candidate.title)) {
+        if (cleanInput === String(r + 1) || 
+            cleanInput === String(candidate.id) || 
+            (candidate.title && cleanInput.toLowerCase() === String(candidate.title).toLowerCase()) ||
+            (candidate.link && cleanInput === String(candidate.link))) {
           removeIndex = r;
           break;
         }
@@ -280,7 +314,7 @@ if (isUserAdmin && adminState) {
     }
 
     if (removeIndex === -1) {
-      Bot.sendMessage("⚠️ Channel not found. Please tap one of the channel buttons below.");
+      Bot.sendMessage("⚠️ Channel not found. Please tap one of the channel buttons below, or send '🧹 Clean Duplicates'.");
       return;
     }
 

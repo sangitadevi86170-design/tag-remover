@@ -29,25 +29,49 @@ User.setProperty("admin_state", "waiting_remove_select", "string");
 var text = "🗑 <b>REMOVE FORCE CHANNEL</b>\n\n" +
   "Select a channel button below to remove, or send its numeric Chat ID / number:\n\n";
 
-var removeKeyboard = [];
+var inlineButtons = [];
+
 for (var i = 0; i < channels.length; i++) {
   var ch = channels[i];
   text += "<b>" + (i + 1) + ".</b> " + (ch.title || "Channel") + "\n" +
     "   • ID: <code>" + ch.id + "</code>\n" +
     "   • Type: " + (ch.type || "public") + "\n\n";
 
-  removeKeyboard.push([
-    { text: "Channel #" + (i + 1), style: "danger" }
+  inlineButtons.push([
+    { text: "❌ Remove " + (i + 1) + ". " + (ch.title ? ch.title.substring(0, 15) : ch.id), callback_data: "/delchannel " + i }
   ]);
 }
 
+inlineButtons.push([
+  { text: "🧹 Clean All Duplicates", callback_data: "/delchannel duplicates" }
+]);
+
+// Also provide keyboard buttons for mobile users
+var removeKeyboard = [];
+for (var k = 0; k < channels.length; k++) {
+  removeKeyboard.push([
+    { text: "Channel #" + (k + 1), style: "danger" }
+  ]);
+}
 removeKeyboard.push([
+  { text: "🧹 Clean Duplicates", style: "primary" },
   { text: "❌ Cancel", style: "danger" }
 ]);
 
+// Send prompt with inline buttons directly for instant 1-tap removal
 Api.sendMessage({
   chat_id: chat.chatid,
   text: text,
+  parse_mode: "html",
+  reply_markup: {
+    inline_keyboard: inlineButtons
+  }
+});
+
+// Also update reply keyboard with options
+Api.sendMessage({
+  chat_id: chat.chatid,
+  text: "👇 <i>Or tap a button below to remove by number:</i>",
   parse_mode: "html",
   reply_markup: {
     keyboard: removeKeyboard,
