@@ -10,6 +10,8 @@
   group: 
 CMD*/
 
+if (!user || !user.telegramid || !chat || !chat.chatid) return;
+
 var isUserAdmin = (String(user.telegramid) === "8710308658" || String(user.telegramid) === "6783114912");
 
 if (!isUserAdmin) {

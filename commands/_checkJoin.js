@@ -10,6 +10,8 @@
   group: 
 CMD*/
 
+if (!user || !user.telegramid || !chat || !chat.chatid) return;
+
 var channels = Bot.getProperty("fsub_channels") || [];
 // Filter only enabled channels
 var activeChannels = [];

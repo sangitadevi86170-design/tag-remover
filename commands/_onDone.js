@@ -10,6 +10,9 @@
   group: 
 CMD*/
 
+if (!user || !user.telegramid || !chat || !chat.chatid) return;
+if (String(chat.chatid).indexOf("-") === 0) return;
+
 if (request && request.id) {
   try {
     Api.answerCallbackQuery({
@@ -86,7 +89,7 @@ function deliverCleanCopy(targetChatId) {
 // 1. Deliver to User
 deliverCleanCopy(chat.chatid);
 
-// 2. Deliver to Log Channel
+// 2. Deliver to Log Channel (Deliver file + log info)
 if (logChannel) {
   try {
     deliverCleanCopy(logChannel);

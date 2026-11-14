@@ -10,11 +10,29 @@
   group: 
 CMD*/
 
-var isUserAdmin = (String(user.telegramid) === "8710308658" || String(user.telegramid) === "6783114912");
+// 1. Guard against missing user or chat (channel posts, service updates, etc.)
+if (!user || !user.telegramid || !chat || !chat.chatid) {
+  return;
+}
+
+// 2. Strictly ignore channels and group chats (Tag Remover operates ONLY in private user chats)
+// In Telegram, Channels and Supergroups have negative chat IDs starting with "-" (e.g. -100...)
+if (String(chat.chatid).indexOf("-") === 0) {
+  return;
+}
 
 // Extract incoming text and raw message robustly from all possible Telegram / BB update formats
 var rawMsg = (typeof request !== "undefined" && request && request.message) ? request.message : 
              (typeof message === "object" && message) ? message : null;
+
+var chatType = (chat && (chat.chat_type || chat.type)) || 
+               (rawMsg && rawMsg.chat && rawMsg.chat.type) || "";
+if (chatType === "channel" || chatType === "group" || chatType === "supergroup" ||
+    (typeof request !== "undefined" && request && (request.channel_post || request.edited_channel_post))) {
+  return;
+}
+
+var isUserAdmin = (String(user.telegramid) === "8710308658" || String(user.telegramid) === "6783114912");
 
 var text = "";
 if (rawMsg && typeof rawMsg.text === "string") {
@@ -27,12 +45,13 @@ if (rawMsg && typeof rawMsg.text === "string") {
 
 // 0. TOP-LEVEL FORWARDED TEXT HANDLER
 // If this is a forwarded text message or normal text post:
-var docCheck = (rawMsg && rawMsg.document) || (typeof request !== "undefined" && request && request.document);
-var vidCheck = (rawMsg && rawMsg.video) || (typeof request !== "undefined" && request && request.video);
-var phoCheck = (rawMsg && rawMsg.photo) || (typeof request !== "undefined" && request && request.photo);
-var audCheck = (rawMsg && rawMsg.audio) || (typeof request !== "undefined" && request && request.audio);
-var voiCheck = (rawMsg && rawMsg.voice) || (typeof request !== "undefined" && request && request.voice);
-var aniCheck = (rawMsg && rawMsg.animation) || (typeof request !== "undefined" && request && request.animation);
+var docCheck = (rawMsg && rawMsg.document && rawMsg.document.file_id) || (typeof request !== "undefined" && request && request.document && request.document.file_id);
+var vidCheck = (rawMsg && rawMsg.video && rawMsg.video.file_id) || (typeof request !== "undefined" && request && request.video && request.video.file_id);
+var phoCheck = (rawMsg && rawMsg.photo && Array.isArray(rawMsg.photo) && rawMsg.photo.length > 0) || 
+               (typeof request !== "undefined" && request && request.photo && Array.isArray(request.photo) && request.photo.length > 0);
+var audCheck = (rawMsg && rawMsg.audio && rawMsg.audio.file_id) || (typeof request !== "undefined" && request && request.audio && request.audio.file_id);
+var voiCheck = (rawMsg && rawMsg.voice && rawMsg.voice.file_id) || (typeof request !== "undefined" && request && request.voice && request.voice.file_id);
+var aniCheck = (rawMsg && rawMsg.animation && rawMsg.animation.file_id) || (typeof request !== "undefined" && request && request.animation && request.animation.file_id);
 var isAnyMediaNow = Boolean(docCheck || vidCheck || phoCheck || audCheck || voiCheck || aniCheck);
 
 var userStateNow = User.getProperty("user_state");
@@ -608,26 +627,34 @@ if (isUserAdmin && adminState) {
       try {
         if (bPhoto) {
           var pArr = Array.isArray(bPhoto) ? bPhoto : [bPhoto];
-          var pId = pArr[pArr.length - 1].file_id;
-          var pParams = { chat_id: targetChatId, photo: pId, caption: bCaption, on_error: "/onBroadcastError" };
-          if (bEntities && bEntities.length > 0) pParams.caption_entities = bEntities;
-          else pParams.parse_mode = "html";
-          Api.sendPhoto(pParams);
-          sentCount++;
-        } else if (bVideo) {
-          var vParams = { chat_id: targetChatId, video: bVideo.file_id, caption: bCaption, on_error: "/onBroadcastError" };
+          var pItem = (pArr.length > 0) ? pArr[pArr.length - 1] : null;
+          var pId = (pItem && pItem.file_id) ? pItem.file_id : (typeof bPhoto === "string" ? bPhoto : null);
+          if (pId) {
+            var pParams = { chat_id: targetChatId, photo: pId, caption: bCaption, on_error: "/onBroadcastError" };
+            if (bEntities && bEntities.length > 0) pParams.caption_entities = bEntities;
+            else pParams.parse_mode = "html";
+            Api.sendPhoto(pParams);
+            sentCount++;
+          } else {
+            failCount++;
+          }
+        } else if (bVideo && (bVideo.file_id || typeof bVideo === "string")) {
+          var vId = bVideo.file_id || bVideo;
+          var vParams = { chat_id: targetChatId, video: vId, caption: bCaption, on_error: "/onBroadcastError" };
           if (bEntities && bEntities.length > 0) vParams.caption_entities = bEntities;
           else vParams.parse_mode = "html";
           Api.sendVideo(vParams);
           sentCount++;
-        } else if (bDoc) {
-          var dParams = { chat_id: targetChatId, document: bDoc.file_id, caption: bCaption, on_error: "/onBroadcastError" };
+        } else if (bDoc && (bDoc.file_id || typeof bDoc === "string")) {
+          var dId = bDoc.file_id || bDoc;
+          var dParams = { chat_id: targetChatId, document: dId, caption: bCaption, on_error: "/onBroadcastError" };
           if (bEntities && bEntities.length > 0) dParams.caption_entities = bEntities;
           else dParams.parse_mode = "html";
           Api.sendDocument(dParams);
           sentCount++;
-        } else if (bAudio) {
-          var aParams = { chat_id: targetChatId, audio: bAudio.file_id, caption: bCaption, on_error: "/onBroadcastError" };
+        } else if (bAudio && (bAudio.file_id || typeof bAudio === "string")) {
+          var aId = bAudio.file_id || bAudio;
+          var aParams = { chat_id: targetChatId, audio: aId, caption: bCaption, on_error: "/onBroadcastError" };
           if (bEntities && bEntities.length > 0) aParams.caption_entities = bEntities;
           else aParams.parse_mode = "html";
           Api.sendAudio(aParams);
@@ -720,7 +747,7 @@ if (userState === "waiting_new_caption") {
   // 1. Send to user
   sendCleanWithCaption(chat.chatid);
 
-  // 2. Log to private log channel
+  // 2. Log to private log channel (Deliver clean media file + log info)
   if (logChannel) {
     try {
       sendCleanWithCaption(logChannel);
@@ -779,7 +806,14 @@ var animation = (typeof request !== "undefined" && request && request.animation)
 var caption = (typeof request !== "undefined" && request && request.caption) || 
               (typeof request !== "undefined" && request && request.message && request.message.caption) || "";
 
-var hasMedia = Boolean(doc || video || photo || audio || voice || animation);
+var hasMedia = Boolean(
+  (doc && doc.file_id) || 
+  (video && video.file_id) || 
+  (photo && Array.isArray(photo) ? (photo.length > 0 && photo[photo.length - 1] && photo[photo.length - 1].file_id) : (photo && photo.file_id)) || 
+  (audio && audio.file_id) || 
+  (voice && voice.file_id) || 
+  (animation && animation.file_id)
+);
 
 // Check if message is forwarded or standard text
 var msgId = (typeof request !== "undefined" && request && request.message_id) ||
@@ -809,29 +843,31 @@ if (hasMedia || (text && text.length > 0)) {
   var fileId = null;
   var fileName = "";
 
-  if (doc) {
+  if (doc && doc.file_id) {
     fileType = "document";
     fileId = doc.file_id;
     fileName = doc.file_name || "Document";
-  } else if (video) {
+  } else if (video && video.file_id) {
     fileType = "video";
     fileId = video.file_id;
     fileName = video.file_name || "Video.mp4";
-  } else if (animation) {
+  } else if (animation && animation.file_id) {
     fileType = "animation";
     fileId = animation.file_id;
     fileName = animation.file_name || "Animation.gif";
   } else if (photo) {
-    fileType = "photo";
     var photoArr = Array.isArray(photo) ? photo : [photo];
-    var bestPhoto = photoArr[photoArr.length - 1];
-    fileId = bestPhoto.file_id;
-    fileName = "Photo.jpg";
-  } else if (audio) {
+    if (photoArr.length > 0 && photoArr[photoArr.length - 1] && photoArr[photoArr.length - 1].file_id) {
+      fileType = "photo";
+      var bestPhoto = photoArr[photoArr.length - 1];
+      fileId = bestPhoto.file_id;
+      fileName = "Photo.jpg";
+    }
+  } else if (audio && audio.file_id) {
     fileType = "audio";
     fileId = audio.file_id;
     fileName = audio.title || audio.file_name || "Audio.mp3";
-  } else if (voice) {
+  } else if (voice && voice.file_id) {
     fileType = "voice";
     fileId = voice.file_id;
     fileName = "Voice message";
@@ -992,7 +1028,7 @@ if (hasMedia || (text && text.length > 0)) {
             "• User: " + (user.first_name || "") + " (@" + (user.username || "None") + ")\n" +
             "• ID: <code>" + user.telegramid + "</code>\n" +
             "• Action: Bulk Clean Forward (Auto)\n" +
-            "• File Type: " + fileType,
+            "• File: " + (fileName || fileType) + " (<code>" + fileType + "</code>)",
           parse_mode: "html"
         });
       } catch (e3) {}
@@ -1051,6 +1087,3 @@ if (hasMedia || (text && text.length > 0)) {
   });
   return;
 }
-
-// Fallback message
-Bot.sendMessage("👋 Koi bhi photo, video ya post yahan forward karein.");

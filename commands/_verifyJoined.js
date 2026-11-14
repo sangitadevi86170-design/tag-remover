@@ -10,6 +10,8 @@
   group: 
 CMD*/
 
+if (!user || !user.telegramid || !chat || !chat.chatid) return;
+
 if (request && request.id) {
   try {
     Api.answerCallbackQuery({

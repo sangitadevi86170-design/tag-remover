@@ -10,6 +10,8 @@
   group: 
 CMD*/
 
+if (!chat || !chat.chatid) return;
+
 var userList = Bot.getProperty("user_list") || [];
 var channels = Bot.getProperty("fsub_channels") || [];
 var totalProcessed = Bot.getProperty("total_processed") || 0;

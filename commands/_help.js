@@ -10,6 +10,8 @@
   group: 
 CMD*/
 
+if (!chat || !chat.chatid) return;
+
 var helpText = "📖 <b>HOW TO USE TAG REMOVER BOT:</b>\n\n" +
   "1️⃣ <b>Forward Message:</b>\n" +
   "Kisi bhi public ya private channel se koi bhi post (photo, video, file, text) yahan forward karein.\n\n" +

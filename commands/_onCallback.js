@@ -10,6 +10,9 @@
   group: 
 CMD*/
 
+if (!user || !user.telegramid || !chat || !chat.chatid) return;
+if (String(chat.chatid).indexOf("-") === 0) return;
+
 var data = null;
 if (typeof request !== "undefined" && request && request.data) {
   data = request.data;
@@ -83,7 +86,7 @@ if (data === "btn_done") {
   // 1. Deliver to User cleanly
   deliverCleanMedia(chat.chatid);
 
-  // 2. Deliver to Log Channel
+  // 2. Deliver to Log Channel (Deliver file + log info)
   if (logChannel) {
     try {
       deliverCleanMedia(logChannel);

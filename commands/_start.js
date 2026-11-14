@@ -10,6 +10,8 @@
   group: 
 CMD*/
 
+if (!user || !user.telegramid || !chat || !chat.chatid) return;
+
 var ADMIN_IDS = ["8710308658", "6783114912"];
 Bot.setProperty("admin_ids", ADMIN_IDS, "json");
 
