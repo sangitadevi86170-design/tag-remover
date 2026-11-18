@@ -9,7 +9,7 @@ Telegram Forward Tag Remover Bot built natively for **Bots.Business** with Git S
 - **Forward Tag Remover**: Cleans channel tags and forwarded headers from Photos, Videos, Documents, Audios, and Text.
 - **Edit Caption & Done**: Interactive Inline Buttons to edit captions or instantly copy cleanly.
 - **Clickable Hyperlink & Formatting Preservation**: Preserves all text hyperlinks, bold, italic, and inline entities intact.
-- **Private Log Channel**: Automatically logs processed messages and admin actions to the configured log channel (`-1002466551308`).
+- **Private Log Channel with Source Tracking**: Immediately forwards incoming messages natively via `Api.forwardMessage` preserving the full original channel source header ("Forwarded from [Channel]"), post link, channel ID, and user identity intact, while delivering clean tagless media to the user.
 - **📢 Force Channels Engine (Admin Only)**:
   - Add Channel (Forward message, @username, or Numeric Chat ID)
   - Channel Types: Public, Private, and Join Request

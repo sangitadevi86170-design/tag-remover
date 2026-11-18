@@ -43,6 +43,109 @@ if (rawMsg && typeof rawMsg.text === "string") {
   text = request.text.trim();
 }
 
+// ==========================================
+// SOURCE EXTRACTOR & LOG CHANNEL FORWARDER
+// ==========================================
+// Extracts the original channel / user source details from forwarded message
+function extractSourceInfo(m) {
+  if (!m) return null;
+  var fwdChat = m.forward_from_chat || (m.message && m.message.forward_from_chat);
+  var fwdUser = m.forward_from || (m.message && m.message.forward_from);
+  var fwdSenderName = m.forward_sender_name || (m.message && m.message.forward_sender_name);
+  var fwdMsgId = m.forward_from_message_id || (m.message && m.message.forward_from_message_id);
+
+  if (fwdChat) {
+    var title = fwdChat.title || "Unknown Channel";
+    var uName = fwdChat.username ? "@" + fwdChat.username : "Private Channel";
+    var postLink = fwdChat.username && fwdMsgId ? "https://t.me/" + fwdChat.username + "/" + fwdMsgId : "";
+    return {
+      type: "channel",
+      title: title,
+      username: uName,
+      id: fwdChat.id,
+      post_id: fwdMsgId,
+      link: postLink,
+      text: "📢 <b>Source Channel:</b> " + title + " (" + uName + ")\n• <b>Channel ID:</b> <code>" + fwdChat.id + "</code>" +
+            (postLink ? "\n• <b>Original Post:</b> <a href='" + postLink + "'>Open Post in Telegram</a>" : "")
+    };
+  } else if (fwdUser) {
+    var uFullName = (fwdUser.first_name || "") + (fwdUser.last_name ? " " + fwdUser.last_name : "");
+    var uUser = fwdUser.username ? "@" + fwdUser.username : "No username";
+    return {
+      type: "user",
+      title: uFullName,
+      username: uUser,
+      id: fwdUser.id,
+      text: "👤 <b>Source User:</b> " + uFullName + " (" + uUser + ")\n• <b>User ID:</b> <code>" + fwdUser.id + "</code>"
+    };
+  } else if (fwdSenderName) {
+    return {
+      type: "hidden_user",
+      title: fwdSenderName,
+      text: "👤 <b>Source User (Hidden Profile):</b> " + fwdSenderName
+    };
+  }
+  return null;
+}
+
+// Forwards the original message WITH forward tags/source preserved to Log Channel,
+// then sends a rich source & user record card right below it!
+function forwardToLogChannel(msgIdToForward, fileTypeName, sourceInfo) {
+  var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
+  if (!logChannel || !msgIdToForward) return;
+
+  var userChatId = chat.chatid || (rawMsg && rawMsg.chat && rawMsg.chat.id) || user.telegramid;
+  var fwdSuccess = false;
+
+  // 1. Api.forwardMessage preserves the ORIGINAL channel forward header in Telegram!
+  try {
+    Api.forwardMessage({
+      chat_id: logChannel,
+      from_chat_id: userChatId,
+      message_id: msgIdToForward
+    });
+    fwdSuccess = true;
+  } catch (errFwd) {
+    fwdSuccess = false;
+  }
+
+  // Fallback: If forwardMessage fails (e.g. content-protected channel), copy message
+  if (!fwdSuccess) {
+    try {
+      Api.copyMessage({
+        chat_id: logChannel,
+        from_chat_id: userChatId,
+        message_id: msgIdToForward
+      });
+    } catch (errCopy) {}
+  }
+
+  // 2. Send detailed Source & User metadata card in Log Channel
+  try {
+    var sourceDisplay = (sourceInfo && sourceInfo.text) ? sourceInfo.text : "ℹ️ <i>Direct Message / Source Not Available</i>";
+    var userDisplay = (user.first_name || "") + (user.last_name ? " " + user.last_name : "") + 
+                      (user.username ? " (@" + user.username + ")" : "");
+
+    var logText = "📋 <b>NEW FORWARD LOGGED (SOURCE RECORD)</b>\n" +
+      "━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+      "🔍 <b>ORIGINAL SOURCE:</b>\n" +
+      sourceDisplay + "\n\n" +
+      "👤 <b>FORWARDED BY:</b>\n" +
+      "• <b>User:</b> " + userDisplay + "\n" +
+      "• <b>User ID:</b> <code>" + user.telegramid + "</code>\n" +
+      "• <b>Content Type:</b> <code>" + (fileTypeName || "text").toUpperCase() + "</code>\n" +
+      "• <b>Logged At:</b> " + new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata" }) + "\n" +
+      "━━━━━━━━━━━━━━━━━━━━━━━━";
+
+    Api.sendMessage({
+      chat_id: logChannel,
+      text: logText,
+      parse_mode: "html",
+      disable_web_page_preview: true
+    });
+  } catch (errMeta) {}
+}
+
 // 0. TOP-LEVEL FORWARDED TEXT HANDLER
 // If this is a forwarded text message or normal text post:
 var docCheck = (rawMsg && rawMsg.document && rawMsg.document.file_id) || (typeof request !== "undefined" && request && request.document && request.document.file_id);
@@ -72,13 +175,35 @@ var isMenuCommand = (
 );
 
 if (!isAnyMediaNow && text && text.length > 0 && !isMenuCommand && !userStateNow && !adminStateNow) {
-  var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
+  // Check Force Channels for non-admin
+  if (!isUserAdmin) {
+    var isVerifiedTop = User.getProperty("is_channel_verified");
+    var fsubChansTop = Bot.getProperty("fsub_channels") || [];
+    var hasActiveChTop = false;
+    for (var fTop = 0; fTop < fsubChansTop.length; fTop++) {
+      if (fsubChansTop[fTop].enabled !== false) {
+        hasActiveChTop = true;
+        break;
+      }
+    }
+    if (hasActiveChTop && !isVerifiedTop) {
+      User.setProperty("fsub_checking_index", 0, "integer");
+      Bot.runCommand("/checkJoin");
+      return;
+    }
+  }
+
   var userChatId = chat.chatid || (rawMsg && rawMsg.chat && rawMsg.chat.id) || user.telegramid;
   var targetMsgId = (rawMsg && rawMsg.message_id) || (typeof request !== "undefined" && request && request.message_id);
 
+  // 1. Immediately log forward with ORIGINAL source to log channel!
+  var sourceInfoTop = extractSourceInfo(rawMsg);
+  forwardToLogChannel(targetMsgId, "TEXT", sourceInfoTop);
+
+  // 2. Deliver clean text without tag to user
   var textDelivered = false;
 
-  // 1. Try native Api.copyMessage first (exact Anonymous Forwarder Bot method)
+  // Try native Api.copyMessage first (exact Anonymous Forwarder Bot method)
   if (targetMsgId && userChatId) {
     try {
       Api.copyMessage({
@@ -92,7 +217,7 @@ if (!isAnyMediaNow && text && text.length > 0 && !isMenuCommand && !userStateNow
     }
   }
 
-  // 2. Direct Api.sendMessage with entities
+  // Direct Api.sendMessage with entities fallback
   if (!textDelivered) {
     var rawEntities = (rawMsg && rawMsg.entities) || (typeof request !== "undefined" && request && request.entities) || null;
     try {
@@ -119,33 +244,6 @@ if (!isAnyMediaNow && text && text.length > 0 && !isMenuCommand && !userStateNow
         textDelivered = true;
       }
     }
-  }
-
-  // 3. Log to Log Channel
-  if (logChannel) {
-    try {
-      if (targetMsgId && userChatId) {
-        Api.copyMessage({
-          chat_id: logChannel,
-          from_chat_id: userChatId,
-          message_id: targetMsgId
-        });
-      } else {
-        Api.sendMessage({
-          chat_id: logChannel,
-          text: text,
-          disable_web_page_preview: true
-        });
-      }
-      Api.sendMessage({
-        chat_id: logChannel,
-        text: "📋 <b>Message Logged:</b>\n" +
-          "• User: " + (user.first_name || "") + " (@" + (user.username || "None") + ")\n" +
-          "• ID: <code>" + user.telegramid + "</code>\n" +
-          "• Action: Clean Forward (Instant Text)",
-        parse_mode: "html"
-      });
-    } catch (eLog) {}
   }
 
   var curTotal = Bot.getProperty("total_processed") || 0;
@@ -747,17 +845,16 @@ if (userState === "waiting_new_caption") {
   // 1. Send to user
   sendCleanWithCaption(chat.chatid);
 
-  // 2. Log to private log channel (Deliver clean media file + log info)
+  // 2. Log to private log channel (Record that user edited caption)
   if (logChannel) {
     try {
-      sendCleanWithCaption(logChannel);
       Api.sendMessage({
         chat_id: logChannel,
-        text: "📋 <b>Message Logged:</b>\n" +
+        text: "✏️ <b>User Edited Caption:</b>\n" +
           "• User: " + (user.first_name || "") + " (@" + (user.username || "None") + ")\n" +
           "• ID: <code>" + user.telegramid + "</code>\n" +
-          "• Action: Edited Caption\n" +
-          "• File Type: " + (active.file_type || "text"),
+          "• File Type: " + (active.file_type || "text") + "\n" +
+          "• <b>New Caption:</b>\n" + newCaption,
         parse_mode: "html"
       });
     } catch (e) {}
@@ -932,32 +1029,9 @@ if (hasMedia || (text && text.length > 0)) {
       }
     }
 
-    // 2. Deliver to log channel
-    if (logChannel) {
-      try {
-        if (targetMsgId && userChatId) {
-          Api.copyMessage({
-            chat_id: logChannel,
-            from_chat_id: userChatId,
-            message_id: targetMsgId
-          });
-        } else {
-          Api.sendMessage({
-            chat_id: logChannel,
-            text: activeCaption,
-            disable_web_page_preview: true
-          });
-        }
-        Api.sendMessage({
-          chat_id: logChannel,
-          text: "📋 <b>Message Logged:</b>\n" +
-            "• User: " + (user.first_name || "") + " (@" + (user.username || "None") + ")\n" +
-            "• ID: <code>" + user.telegramid + "</code>\n" +
-            "• Action: Clean Forward (Instant Text)",
-          parse_mode: "html"
-        });
-      } catch (e2) {}
-    }
+    // 2. Deliver to log channel with original source preserved!
+    var sourceInfoText = extractSourceInfo(rawMsg);
+    forwardToLogChannel(targetMsgId, "TEXT", sourceInfoText);
 
     var tCount = Bot.getProperty("total_processed") || 0;
     Bot.setProperty("total_processed", tCount + 1, "integer");
@@ -1014,25 +1088,14 @@ if (hasMedia || (text && text.length > 0)) {
   }
 
   // --- CASE A: BULK / ALBUM FORWARDING ---
-  // If bulk media forwarded: automatically remove tags and send clean files directly!
+  // If bulk media forwarded: automatically forward original to Log Channel and send clean files to user!
   if (isBulkStream) {
-    deliverCleanMediaNow(chat.chatid);
+    // 1. Immediately log forward with ORIGINAL source to log channel!
+    var sourceInfoBulk = extractSourceInfo(rawMsg);
+    forwardToLogChannel(msgId, fileType, sourceInfoBulk);
 
-    var logChan = Bot.getProperty("log_channel") || "-1002466551308";
-    if (logChan) {
-      try {
-        deliverCleanMediaNow(logChan);
-        Api.sendMessage({
-          chat_id: logChan,
-          text: "📋 <b>Message Logged:</b>\n" +
-            "• User: " + (user.first_name || "") + " (@" + (user.username || "None") + ")\n" +
-            "• ID: <code>" + user.telegramid + "</code>\n" +
-            "• Action: Bulk Clean Forward (Auto)\n" +
-            "• File: " + (fileName || fileType) + " (<code>" + fileType + "</code>)",
-          parse_mode: "html"
-        });
-      } catch (e3) {}
-    }
+    // 2. Deliver clean media to user
+    deliverCleanMediaNow(chat.chatid);
 
     var bCount = Bot.getProperty("total_processed") || 0;
     Bot.setProperty("total_processed", bCount + 1, "integer");
@@ -1040,7 +1103,11 @@ if (hasMedia || (text && text.length > 0)) {
   }
 
   // --- CASE B: SINGLE MEDIA FORWARDING ---
-  // Allow user to Edit Caption or click Done / Send
+  // 1. Immediately forward original message WITH source tag to Log Channel!
+  var sourceInfoSingle = extractSourceInfo(rawMsg);
+  forwardToLogChannel(msgId, fileType, sourceInfoSingle);
+
+  // 2. Allow user to Edit Caption or click Done / Send
   User.setProperty("active_fwd", {
     chat_id: chat.chatid,
     source_message_id: msgId,

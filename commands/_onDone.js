@@ -89,17 +89,16 @@ function deliverCleanCopy(targetChatId) {
 // 1. Deliver to User
 deliverCleanCopy(chat.chatid);
 
-// 2. Deliver to Log Channel (Deliver file + log info)
+// 2. Deliver confirmation to Log Channel
 if (logChannel) {
   try {
-    deliverCleanCopy(logChannel);
     Api.sendMessage({
       chat_id: logChannel,
-      text: "📋 <b>Message Logged:</b>\n" +
-        "• User: " + (user.first_name || "") + " (@" + (user.username || "None") + ")\n" +
-        "• ID: <code>" + user.telegramid + "</code>\n" +
-        "• Action: Clean Forward (Done)\n" +
-        "• File: " + (active.file_name || active.file_type),
+      text: "✅ <b>Clean Copy Delivered to User:</b>\n" +
+        "• <b>User:</b> " + (user.first_name || "") + " (@" + (user.username || "None") + ")\n" +
+        "• <b>User ID:</b> <code>" + user.telegramid + "</code>\n" +
+        "• <b>Status:</b> User confirmed & received clean copy\n" +
+        "• <b>File:</b> " + (active.file_name || active.file_type || "Media"),
       parse_mode: "html"
     });
   } catch (err) {}
