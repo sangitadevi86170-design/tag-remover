@@ -56,41 +56,70 @@ if (data === "btn_done") {
   var sendCaption = active.caption || "";
 
   // Helper function to send media cleanly by file_id without ANY forward header
-  function deliverCleanMedia(targetChatId) {
+  function deliverCleanMedia(targetChatId, appendUserInfo) {
+    var finalCaption = sendCaption;
+    var parseMode = undefined;
+
+    if (appendUserInfo) {
+      var uNameStr = user.username ? "@" + user.username : (user.first_name || "User");
+      var logTag = "\n\n👤 <b>Forwarded by:</b> " + uNameStr + " [<code>" + user.telegramid + "</code>]";
+      if (finalCaption.length + logTag.length > 1024) {
+        finalCaption = finalCaption.substring(0, 1024 - logTag.length);
+      }
+      finalCaption = finalCaption + logTag;
+      parseMode = "html";
+    }
+
+    var mParams = { chat_id: targetChatId, caption: finalCaption };
+    if (parseMode) mParams.parse_mode = parseMode;
+
     if (active.file_type === "document") {
-      Api.sendDocument({ chat_id: targetChatId, document: active.file_id, caption: sendCaption });
+      mParams.document = active.file_id;
+      Api.sendDocument(mParams);
     } else if (active.file_type === "video") {
-      Api.sendVideo({ chat_id: targetChatId, video: active.file_id, caption: sendCaption });
+      mParams.video = active.file_id;
+      Api.sendVideo(mParams);
     } else if (active.file_type === "photo") {
-      Api.sendPhoto({ chat_id: targetChatId, photo: active.file_id, caption: sendCaption });
+      mParams.photo = active.file_id;
+      Api.sendPhoto(mParams);
     } else if (active.file_type === "audio") {
-      Api.sendAudio({ chat_id: targetChatId, audio: active.file_id, caption: sendCaption });
+      mParams.audio = active.file_id;
+      Api.sendAudio(mParams);
     } else if (active.file_type === "voice") {
-      Api.sendVoice({ chat_id: targetChatId, voice: active.file_id, caption: sendCaption });
+      mParams.voice = active.file_id;
+      Api.sendVoice(mParams);
     } else if (active.file_type === "animation") {
-      Api.sendAnimation({ chat_id: targetChatId, animation: active.file_id, caption: sendCaption });
+      mParams.animation = active.file_id;
+      Api.sendAnimation(mParams);
     } else {
       // Pure text or copyMessage fallback
       if (active.source_message_id) {
-        Api.copyMessage({
+        var copyOpts = {
           chat_id: targetChatId,
           from_chat_id: active.chat_id,
           message_id: active.source_message_id
-        });
-      } else if (sendCaption) {
-        Api.sendMessage({ chat_id: targetChatId, text: sendCaption });
+        };
+        if (appendUserInfo) {
+          copyOpts.caption = finalCaption;
+          copyOpts.parse_mode = "html";
+        }
+        Api.copyMessage(copyOpts);
+      } else if (finalCaption) {
+        var tOpts = { chat_id: targetChatId, text: finalCaption };
+        if (parseMode) tOpts.parse_mode = parseMode;
+        Api.sendMessage(tOpts);
       }
     }
   }
 
-  // 1. Deliver to User cleanly
-  deliverCleanMedia(chat.chatid);
+  // 1. Deliver to User cleanly (without user tag)
+  deliverCleanMedia(chat.chatid, false);
 
-  // 2. Deliver clean response to Log Channel (Tag removed copy)
+  // 2. Deliver clean response to Log Channel with user's username & ID
   var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
   if (logChannel) {
     try {
-      deliverCleanMedia(logChannel);
+      deliverCleanMedia(logChannel, true);
     } catch (err) {}
   }
 

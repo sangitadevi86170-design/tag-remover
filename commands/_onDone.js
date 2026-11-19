@@ -30,25 +30,39 @@ if (!active) {
 
 var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
 
-function deliverCleanCopy(targetChatId) {
+function deliverCleanCopy(targetChatId, appendUserInfo) {
+  var sendCaption = active.caption || "";
+  var entities = active.caption_entities;
+
+  if (appendUserInfo) {
+    var uNameStr = user.username ? "@" + user.username : (user.first_name || "User");
+    var logTag = "\n\n👤 <b>Forwarded by:</b> " + uNameStr + " [<code>" + user.telegramid + "</code>]";
+    if (sendCaption.length + logTag.length > 1024) {
+      sendCaption = sendCaption.substring(0, 1024 - logTag.length);
+    }
+    sendCaption = sendCaption + logTag;
+    entities = null;
+  }
+
   // Telegram copyMessage copies the message 100% exactly as-is:
   // - Preserves all clickable hyperlinks, mentions, bold, italic, code
   // - Preserves files, folders, zip, documents, videos, photos
   // - COMPLETELY REMOVES the "Forwarded from..." header!
   if (active.source_message_id) {
     try {
-      Api.copyMessage({
+      var copyParams = {
         chat_id: targetChatId,
         from_chat_id: active.chat_id,
         message_id: active.source_message_id
-      });
+      };
+      if (appendUserInfo) {
+        copyParams.caption = sendCaption;
+        copyParams.parse_mode = "html";
+      }
+      Api.copyMessage(copyParams);
       return;
     } catch (err) {}
   }
-
-  // Smart fallback with caption_entities preservation
-  var sendCaption = active.caption || "";
-  var entities = active.caption_entities;
 
   var mediaParams = {
     chat_id: targetChatId,
@@ -79,21 +93,19 @@ function deliverCleanCopy(targetChatId) {
     mediaParams.animation = active.file_id;
     Api.sendAnimation(mediaParams);
   } else if (sendCaption) {
-    var textParams = { chat_id: targetChatId, text: sendCaption };
-    if (entities && entities.length > 0) textParams.entities = entities;
-    else textParams.parse_mode = "html";
+    var textParams = { chat_id: targetChatId, text: sendCaption, parse_mode: "html" };
     Api.sendMessage(textParams);
   }
 }
 
-// 1. Deliver to User cleanly
-deliverCleanCopy(chat.chatid);
+// 1. Deliver to User cleanly (without user tag)
+deliverCleanCopy(chat.chatid, false);
 
-// 2. Deliver clean response to Log Channel (Tag removed copy)
+// 2. Deliver clean response to Log Channel with user's username & ID
 var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
 if (logChannel) {
   try {
-    deliverCleanCopy(logChannel);
+    deliverCleanCopy(logChannel, true);
   } catch (err) {}
 }
 

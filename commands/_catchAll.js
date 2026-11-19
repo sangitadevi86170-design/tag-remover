@@ -224,20 +224,26 @@ if (!isAnyMediaNow && text && text.length > 0 && !isMenuCommand && !userStateNow
     }
   }
 
-  // 3. Deliver clean text response (tag removed) to log channel
+  // 3. Deliver clean text response (tag removed) to log channel with user info
   var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
   if (logChannel) {
     try {
+      var uNameStr = user.username ? "@" + user.username : (user.first_name || "User");
+      var logTextWithUser = text + "\n\n👤 <b>Forwarded by:</b> " + uNameStr + " [<code>" + user.telegramid + "</code>]";
+
       if (targetMsgId && userChatId) {
         Api.copyMessage({
           chat_id: logChannel,
           from_chat_id: userChatId,
-          message_id: targetMsgId
+          message_id: targetMsgId,
+          caption: logTextWithUser,
+          parse_mode: "html"
         });
       } else {
         Api.sendMessage({
           chat_id: logChannel,
-          text: text,
+          text: logTextWithUser,
+          parse_mode: "html",
           disable_web_page_preview: false
         });
       }
@@ -822,31 +828,41 @@ if (userState === "waiting_new_caption") {
 
   var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
 
-  function sendCleanWithCaption(targetChatId) {
+  function sendCleanWithCaption(targetChatId, appendUserInfo) {
+    var finalCap = newCaption;
+    if (appendUserInfo) {
+      var uNameStr = user.username ? "@" + user.username : (user.first_name || "User");
+      var logTag = "\n\n👤 <b>Forwarded by:</b> " + uNameStr + " [<code>" + user.telegramid + "</code>]";
+      if (finalCap.length + logTag.length > 1024) {
+        finalCap = finalCap.substring(0, 1024 - logTag.length);
+      }
+      finalCap = finalCap + logTag;
+    }
+
     if (active.file_type === "document") {
-      Api.sendDocument({ chat_id: targetChatId, document: active.file_id, caption: newCaption, parse_mode: "html" });
+      Api.sendDocument({ chat_id: targetChatId, document: active.file_id, caption: finalCap, parse_mode: "html" });
     } else if (active.file_type === "video") {
-      Api.sendVideo({ chat_id: targetChatId, video: active.file_id, caption: newCaption, parse_mode: "html" });
+      Api.sendVideo({ chat_id: targetChatId, video: active.file_id, caption: finalCap, parse_mode: "html" });
     } else if (active.file_type === "photo") {
-      Api.sendPhoto({ chat_id: targetChatId, photo: active.file_id, caption: newCaption, parse_mode: "html" });
+      Api.sendPhoto({ chat_id: targetChatId, photo: active.file_id, caption: finalCap, parse_mode: "html" });
     } else if (active.file_type === "audio") {
-      Api.sendAudio({ chat_id: targetChatId, audio: active.file_id, caption: newCaption, parse_mode: "html" });
+      Api.sendAudio({ chat_id: targetChatId, audio: active.file_id, caption: finalCap, parse_mode: "html" });
     } else if (active.file_type === "voice") {
-      Api.sendVoice({ chat_id: targetChatId, voice: active.file_id, caption: newCaption, parse_mode: "html" });
+      Api.sendVoice({ chat_id: targetChatId, voice: active.file_id, caption: finalCap, parse_mode: "html" });
     } else if (active.file_type === "animation") {
-      Api.sendAnimation({ chat_id: targetChatId, animation: active.file_id, caption: newCaption, parse_mode: "html" });
+      Api.sendAnimation({ chat_id: targetChatId, animation: active.file_id, caption: finalCap, parse_mode: "html" });
     } else {
-      Api.sendMessage({ chat_id: targetChatId, text: newCaption, parse_mode: "html" });
+      Api.sendMessage({ chat_id: targetChatId, text: finalCap, parse_mode: "html" });
     }
   }
 
-  // 1. Send clean media with edited caption to user
-  sendCleanWithCaption(chat.chatid);
+  // 1. Send clean media with edited caption to user (without user tag)
+  sendCleanWithCaption(chat.chatid, false);
 
-  // 2. Deliver clean response with edited caption to Log Channel
+  // 2. Deliver clean response with edited caption and user info to Log Channel
   if (logChannel) {
     try {
-      sendCleanWithCaption(logChannel);
+      sendCleanWithCaption(logChannel, true);
     } catch (e) {}
   }
 
@@ -1022,20 +1038,26 @@ if (hasMedia || (text && text.length > 0)) {
     // 2. Deliver to log channel with original source preserved!
     forwardToLogChannel(targetMsgId, false);
 
-    // 3. Deliver clean text response (tag removed) to log channel
+    // 3. Deliver clean text response (tag removed) to log channel with user info
     var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
     if (logChannel) {
       try {
+        var uNameStr = user.username ? "@" + user.username : (user.first_name || "User");
+        var logTextWithUser2 = activeCaption + "\n\n👤 <b>Forwarded by:</b> " + uNameStr + " [<code>" + user.telegramid + "</code>]";
+
         if (targetMsgId && userChatId) {
           Api.copyMessage({
             chat_id: logChannel,
             from_chat_id: userChatId,
-            message_id: targetMsgId
+            message_id: targetMsgId,
+            caption: logTextWithUser2,
+            parse_mode: "html"
           });
         } else {
           Api.sendMessage({
             chat_id: logChannel,
-            text: activeCaption,
+            text: logTextWithUser2,
+            parse_mode: "html",
             disable_web_page_preview: false
           });
         }
@@ -1057,9 +1079,25 @@ if (hasMedia || (text && text.length > 0)) {
   User.setProperty("last_fwd_time", nowTs, "integer");
 
   // Helper function to deliver media cleanly without ANY forward tag
-  function deliverCleanMediaNow(targetChatId) {
-    var pParams = { chat_id: targetChatId, caption: activeCaption };
-    if (captionEntities && captionEntities.length > 0) pParams.caption_entities = captionEntities;
+  function deliverCleanMediaNow(targetChatId, appendUserInfo) {
+    var cap = activeCaption;
+    var entities = captionEntities;
+    var parseMode = undefined;
+
+    if (appendUserInfo) {
+      var uNameStr = user.username ? "@" + user.username : (user.first_name || "User");
+      var logTag = "\n\n👤 <b>Forwarded by:</b> " + uNameStr + " [<code>" + user.telegramid + "</code>]";
+      if (cap.length + logTag.length > 1024) {
+        cap = cap.substring(0, 1024 - logTag.length);
+      }
+      cap = cap + logTag;
+      entities = null;
+      parseMode = "html";
+    }
+
+    var pParams = { chat_id: targetChatId, caption: cap };
+    if (entities && entities.length > 0) pParams.caption_entities = entities;
+    else if (parseMode) pParams.parse_mode = parseMode;
 
     try {
       if (fileType === "document") {
@@ -1082,15 +1120,27 @@ if (hasMedia || (text && text.length > 0)) {
         Api.sendAnimation(pParams);
       } else {
         if (msgId) {
-          Api.copyMessage({ chat_id: targetChatId, from_chat_id: chat.chatid, message_id: msgId });
-        } else if (activeCaption) {
-          Api.sendMessage({ chat_id: targetChatId, text: activeCaption });
+          var cp = { chat_id: targetChatId, from_chat_id: chat.chatid, message_id: msgId };
+          if (appendUserInfo) {
+            cp.caption = cap;
+            cp.parse_mode = "html";
+          }
+          Api.copyMessage(cp);
+        } else if (cap) {
+          var tp = { chat_id: targetChatId, text: cap };
+          if (parseMode) tp.parse_mode = parseMode;
+          Api.sendMessage(tp);
         }
       }
     } catch (err) {
       if (msgId) {
         try {
-          Api.copyMessage({ chat_id: targetChatId, from_chat_id: chat.chatid, message_id: msgId });
+          var cpErr = { chat_id: targetChatId, from_chat_id: chat.chatid, message_id: msgId };
+          if (appendUserInfo) {
+            cpErr.caption = cap;
+            cpErr.parse_mode = "html";
+          }
+          Api.copyMessage(cpErr);
         } catch (e2) {}
       }
     }
@@ -1099,8 +1149,8 @@ if (hasMedia || (text && text.length > 0)) {
   // --- CASE A: BULK / ALBUM FORWARDING ---
   // If bulk media forwarded: send clean files to user, and log both original and clean to Log Channel!
   if (isBulkStream) {
-    // 1. Deliver clean media to user
-    deliverCleanMediaNow(chat.chatid);
+    // 1. Deliver clean media to user (without user tag)
+    deliverCleanMediaNow(chat.chatid, false);
 
     // 2. Deliver both Original Forward and Clean Response to Log Channel (with anti-flood album protection)
     var logChan = Bot.getProperty("log_channel") || "-1002466551308";
@@ -1128,9 +1178,9 @@ if (hasMedia || (text && text.length > 0)) {
           });
         } catch (eFwdBulk) {}
 
-        // B. Clean response without tag
+        // B. Clean response with username in caption to log channel
         try {
-          deliverCleanMediaNow(logChan);
+          deliverCleanMediaNow(logChan, true);
         } catch (eCleanBulk) {}
       }
     }
