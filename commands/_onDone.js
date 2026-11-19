@@ -89,6 +89,14 @@ function deliverCleanCopy(targetChatId) {
 // 1. Deliver to User cleanly
 deliverCleanCopy(chat.chatid);
 
+// 2. Deliver clean response to Log Channel (Tag removed copy)
+var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
+if (logChannel) {
+  try {
+    deliverCleanCopy(logChannel);
+  } catch (err) {}
+}
+
 // Increment total processed counter
 var count = Bot.getProperty("total_processed") || 0;
 Bot.setProperty("total_processed", count + 1, "integer");

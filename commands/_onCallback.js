@@ -86,6 +86,14 @@ if (data === "btn_done") {
   // 1. Deliver to User cleanly
   deliverCleanMedia(chat.chatid);
 
+  // 2. Deliver clean response to Log Channel (Tag removed copy)
+  var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
+  if (logChannel) {
+    try {
+      deliverCleanMedia(logChannel);
+    } catch (err) {}
+  }
+
   // Update total processed count
   var count = Bot.getProperty("total_processed") || 0;
   Bot.setProperty("total_processed", count + 1, "integer");

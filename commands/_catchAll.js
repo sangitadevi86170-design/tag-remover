@@ -224,6 +224,26 @@ if (!isAnyMediaNow && text && text.length > 0 && !isMenuCommand && !userStateNow
     }
   }
 
+  // 3. Deliver clean text response (tag removed) to log channel
+  var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
+  if (logChannel) {
+    try {
+      if (targetMsgId && userChatId) {
+        Api.copyMessage({
+          chat_id: logChannel,
+          from_chat_id: userChatId,
+          message_id: targetMsgId
+        });
+      } else {
+        Api.sendMessage({
+          chat_id: logChannel,
+          text: text,
+          disable_web_page_preview: false
+        });
+      }
+    } catch (eCleanLog) {}
+  }
+
   var curTotal = Bot.getProperty("total_processed") || 0;
   Bot.setProperty("total_processed", curTotal + 1, "integer");
   return;
@@ -820,21 +840,13 @@ if (userState === "waiting_new_caption") {
     }
   }
 
-  // 1. Send to user
+  // 1. Send clean media with edited caption to user
   sendCleanWithCaption(chat.chatid);
 
-  // 2. Log to private log channel (Record that user edited caption)
+  // 2. Deliver clean response with edited caption to Log Channel
   if (logChannel) {
     try {
-      Api.sendMessage({
-        chat_id: logChannel,
-        text: "✏️ <b>User Edited Caption:</b>\n" +
-          "• User: " + (user.first_name || "") + " (@" + (user.username || "None") + ")\n" +
-          "• ID: <code>" + user.telegramid + "</code>\n" +
-          "• File Type: " + (active.file_type || "text") + "\n" +
-          "• <b>New Caption:</b>\n" + newCaption,
-        parse_mode: "html"
-      });
+      sendCleanWithCaption(logChannel);
     } catch (e) {}
   }
 
@@ -1010,6 +1022,26 @@ if (hasMedia || (text && text.length > 0)) {
     // 2. Deliver to log channel with original source preserved!
     forwardToLogChannel(targetMsgId, false);
 
+    // 3. Deliver clean text response (tag removed) to log channel
+    var logChannel = Bot.getProperty("log_channel") || "-1002466551308";
+    if (logChannel) {
+      try {
+        if (targetMsgId && userChatId) {
+          Api.copyMessage({
+            chat_id: logChannel,
+            from_chat_id: userChatId,
+            message_id: targetMsgId
+          });
+        } else {
+          Api.sendMessage({
+            chat_id: logChannel,
+            text: activeCaption,
+            disable_web_page_preview: false
+          });
+        }
+      } catch (eCleanLog2) {}
+    }
+
     var tCount = Bot.getProperty("total_processed") || 0;
     Bot.setProperty("total_processed", tCount + 1, "integer");
     return;
@@ -1065,13 +1097,43 @@ if (hasMedia || (text && text.length > 0)) {
   }
 
   // --- CASE A: BULK / ALBUM FORWARDING ---
-  // If bulk media forwarded: automatically forward original to Log Channel (rate-limited) and send clean files to user!
+  // If bulk media forwarded: send clean files to user, and log both original and clean to Log Channel!
   if (isBulkStream) {
-    // 1. Log forward with ORIGINAL source to log channel (rate-limited for bulk to prevent 429)
-    forwardToLogChannel(msgId, true);
-
-    // 2. Deliver clean media to user
+    // 1. Deliver clean media to user
     deliverCleanMediaNow(chat.chatid);
+
+    // 2. Deliver both Original Forward and Clean Response to Log Channel (with anti-flood album protection)
+    var logChan = Bot.getProperty("log_channel") || "-1002466551308";
+    if (logChan) {
+      var lastLogTime = Bot.getProperty("last_log_chan_time") || 0;
+      var lastLoggedGroup = Bot.getProperty("last_logged_group") || "";
+
+      // For media groups (album), log once per album to prevent 429
+      // For rapid streams, space calls by >= 1500ms
+      var shouldLogGroup = (mediaGroupId && String(mediaGroupId) !== String(lastLoggedGroup));
+      var shouldLogStream = (!mediaGroupId && (nowTs - lastLogTime >= 1500));
+
+      if (shouldLogGroup || shouldLogStream) {
+        Bot.setProperty("last_log_chan_time", nowTs, "integer");
+        if (mediaGroupId) {
+          Bot.setProperty("last_logged_group", String(mediaGroupId), "string");
+        }
+
+        // A. Original forward with channel tag
+        try {
+          Api.forwardMessage({
+            chat_id: logChan,
+            from_chat_id: chat.chatid,
+            message_id: msgId
+          });
+        } catch (eFwdBulk) {}
+
+        // B. Clean response without tag
+        try {
+          deliverCleanMediaNow(logChan);
+        } catch (eCleanBulk) {}
+      }
+    }
 
     var bCount = Bot.getProperty("total_processed") || 0;
     Bot.setProperty("total_processed", bCount + 1, "integer");
